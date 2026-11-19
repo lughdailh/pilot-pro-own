@@ -1,0 +1,10 @@
+.DS_Store
+/Diagnostics/
+/build/
+/.build/
+*.xcuserstate
+.env
+.env.*
+*.p12
+*.mobileprovision
+*.provisionprofile

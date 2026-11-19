@@ -1,0 +1,125 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="1200" viewBox="0 0 900 1200" fill="none" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+<title>Pilot Pro — mapa de controls</title>
+<desc>Esquema amb quatre botons a cada lateral en graella 2 per 2, creu inferior, tres controls giratoris i joystick central. Fons transparent. Les superfícies laterals s'han desplegat per facilitar la configuració.</desc>
+<g id="body">
+<path d="M350 85 C300 85 283 115 260 166 L180 345 C153 407 152 478 177 548 L313 1030 Q325 1075 370 1075 H530 Q575 1075 587 1030 L723 548 C748 478 747 407 720 345 L640 166 C617 115 600 85 550 85 Z"/>
+<path d="M362 110 C322 110 307 139 288 182 L211 354 C184 416 184 477 207 542 L338 1026 Q344 1050 371 1050 H529 Q556 1050 562 1026 L693 542 C716 477 716 416 689 354 L612 182 C593 139 578 110 538 110 Z" stroke-width="2"/>
+</g>
+<g id="small-wheel"><circle cx="450" cy="207" r="48"/><ellipse cx="450" cy="207" rx="35" ry="35" stroke-width="2"/></g>
+<g id="large-wheel"><circle cx="450" cy="510" r="220"/><circle cx="450" cy="510" r="190" stroke-width="2"/>
+<path d="M647.00 510.00 L661.00 510.00" stroke-width="2"/>
+<path d="M646.58 522.88 L660.55 523.80" stroke-width="2"/>
+<path d="M645.31 535.71 L659.19 537.54" stroke-width="2"/>
+<path d="M643.21 548.43 L656.95 551.16" stroke-width="2"/>
+<path d="M640.29 560.99 L653.81 564.61" stroke-width="2"/>
+<path d="M636.55 573.32 L649.80 577.82" stroke-width="2"/>
+<path d="M632.00 585.39 L644.94 590.75" stroke-width="2"/>
+<path d="M626.68 597.13 L639.24 603.32" stroke-width="2"/>
+<path d="M620.61 608.50 L632.73 615.50" stroke-width="2"/>
+<path d="M613.80 619.45 L625.44 627.23" stroke-width="2"/>
+<path d="M606.29 629.93 L617.40 638.45" stroke-width="2"/>
+<path d="M598.11 639.89 L608.64 649.12" stroke-width="2"/>
+<path d="M589.30 649.30 L599.20 659.20" stroke-width="2"/>
+<path d="M579.89 658.11 L589.12 668.64" stroke-width="2"/>
+<path d="M569.93 666.29 L578.45 677.40" stroke-width="2"/>
+<path d="M559.45 673.80 L567.23 685.44" stroke-width="2"/>
+<path d="M548.50 680.61 L555.50 692.73" stroke-width="2"/>
+<path d="M537.13 686.68 L543.32 699.24" stroke-width="2"/>
+<path d="M525.39 692.00 L530.75 704.94" stroke-width="2"/>
+<path d="M513.32 696.55 L517.82 709.80" stroke-width="2"/>
+<path d="M500.99 700.29 L504.61 713.81" stroke-width="2"/>
+<path d="M488.43 703.21 L491.16 716.95" stroke-width="2"/>
+<path d="M475.71 705.31 L477.54 719.19" stroke-width="2"/>
+<path d="M462.88 706.58 L463.80 720.55" stroke-width="2"/>
+<path d="M450.00 707.00 L450.00 721.00" stroke-width="2"/>
+<path d="M437.12 706.58 L436.20 720.55" stroke-width="2"/>
+<path d="M424.29 705.31 L422.46 719.19" stroke-width="2"/>
+<path d="M411.57 703.21 L408.84 716.95" stroke-width="2"/>
+<path d="M399.01 700.29 L395.39 713.81" stroke-width="2"/>
+<path d="M386.68 696.55 L382.18 709.80" stroke-width="2"/>
+<path d="M374.61 692.00 L369.25 704.94" stroke-width="2"/>
+<path d="M362.87 686.68 L356.68 699.24" stroke-width="2"/>
+<path d="M351.50 680.61 L344.50 692.73" stroke-width="2"/>
+<path d="M340.55 673.80 L332.77 685.44" stroke-width="2"/>
+<path d="M330.07 666.29 L321.55 677.40" stroke-width="2"/>
+<path d="M320.11 658.11 L310.88 668.64" stroke-width="2"/>
+<path d="M310.70 649.30 L300.80 659.20" stroke-width="2"/>
+<path d="M301.89 639.89 L291.36 649.12" stroke-width="2"/>
+<path d="M293.71 629.93 L282.60 638.45" stroke-width="2"/>
+<path d="M286.20 619.45 L274.56 627.23" stroke-width="2"/>
+<path d="M279.39 608.50 L267.27 615.50" stroke-width="2"/>
+<path d="M273.32 597.13 L260.76 603.32" stroke-width="2"/>
+<path d="M268.00 585.39 L255.06 590.75" stroke-width="2"/>
+<path d="M263.45 573.32 L250.20 577.82" stroke-width="2"/>
+<path d="M259.71 560.99 L246.19 564.61" stroke-width="2"/>
+<path d="M256.79 548.43 L243.05 551.16" stroke-width="2"/>
+<path d="M254.69 535.71 L240.81 537.54" stroke-width="2"/>
+<path d="M253.42 522.88 L239.45 523.80" stroke-width="2"/>
+<path d="M253.00 510.00 L239.00 510.00" stroke-width="2"/>
+<path d="M253.42 497.12 L239.45 496.20" stroke-width="2"/>
+<path d="M254.69 484.29 L240.81 482.46" stroke-width="2"/>
+<path d="M256.79 471.57 L243.05 468.84" stroke-width="2"/>
+<path d="M259.71 459.01 L246.19 455.39" stroke-width="2"/>
+<path d="M263.45 446.68 L250.20 442.18" stroke-width="2"/>
+<path d="M268.00 434.61 L255.06 429.25" stroke-width="2"/>
+<path d="M273.32 422.87 L260.76 416.68" stroke-width="2"/>
+<path d="M279.39 411.50 L267.27 404.50" stroke-width="2"/>
+<path d="M286.20 400.55 L274.56 392.77" stroke-width="2"/>
+<path d="M293.71 390.07 L282.60 381.55" stroke-width="2"/>
+<path d="M301.89 380.11 L291.36 370.88" stroke-width="2"/>
+<path d="M310.70 370.70 L300.80 360.80" stroke-width="2"/>
+<path d="M320.11 361.89 L310.88 351.36" stroke-width="2"/>
+<path d="M330.07 353.71 L321.55 342.60" stroke-width="2"/>
+<path d="M340.55 346.20 L332.77 334.56" stroke-width="2"/>
+<path d="M351.50 339.39 L344.50 327.27" stroke-width="2"/>
+<path d="M362.87 333.32 L356.68 320.76" stroke-width="2"/>
+<path d="M374.61 328.00 L369.25 315.06" stroke-width="2"/>
+<path d="M386.68 323.45 L382.18 310.20" stroke-width="2"/>
+<path d="M399.01 319.71 L395.39 306.19" stroke-width="2"/>
+<path d="M411.57 316.79 L408.84 303.05" stroke-width="2"/>
+<path d="M424.29 314.69 L422.46 300.81" stroke-width="2"/>
+<path d="M437.12 313.42 L436.20 299.45" stroke-width="2"/>
+<path d="M450.00 313.00 L450.00 299.00" stroke-width="2"/>
+<path d="M462.88 313.42 L463.80 299.45" stroke-width="2"/>
+<path d="M475.71 314.69 L477.54 300.81" stroke-width="2"/>
+<path d="M488.43 316.79 L491.16 303.05" stroke-width="2"/>
+<path d="M500.99 319.71 L504.61 306.19" stroke-width="2"/>
+<path d="M513.32 323.45 L517.82 310.20" stroke-width="2"/>
+<path d="M525.39 328.00 L530.75 315.06" stroke-width="2"/>
+<path d="M537.13 333.32 L543.32 320.76" stroke-width="2"/>
+<path d="M548.50 339.39 L555.50 327.27" stroke-width="2"/>
+<path d="M559.45 346.20 L567.23 334.56" stroke-width="2"/>
+<path d="M569.93 353.71 L578.45 342.60" stroke-width="2"/>
+<path d="M579.89 361.89 L589.12 351.36" stroke-width="2"/>
+<path d="M589.30 370.70 L599.20 360.80" stroke-width="2"/>
+<path d="M598.11 380.11 L608.64 370.88" stroke-width="2"/>
+<path d="M606.29 390.07 L617.40 381.55" stroke-width="2"/>
+<path d="M613.80 400.55 L625.44 392.77" stroke-width="2"/>
+<path d="M620.61 411.50 L632.73 404.50" stroke-width="2"/>
+<path d="M626.68 422.87 L639.24 416.68" stroke-width="2"/>
+<path d="M632.00 434.61 L644.94 429.25" stroke-width="2"/>
+<path d="M636.55 446.68 L649.80 442.18" stroke-width="2"/>
+<path d="M640.29 459.01 L653.81 455.39" stroke-width="2"/>
+<path d="M643.21 471.57 L656.95 468.84" stroke-width="2"/>
+<path d="M645.31 484.29 L659.19 482.46" stroke-width="2"/>
+<path d="M646.58 497.12 L660.55 496.20" stroke-width="2"/>
+</g><g id="dial"><circle cx="450" cy="510" r="166"/><circle cx="450" cy="510" r="149" stroke-width="2"/></g>
+<g id="joystick"><circle cx="450" cy="510" r="104"/><circle cx="450" cy="510" r="62"/><path d="M418 455 Q450 439 482 455" stroke-width="2"/></g>
+<g id="side-left"><rect x="14" y="174" width="138" height="192" rx="20" stroke-width="2"/>
+<rect id="side.left.1" x="20" y="185" width="60" height="78" rx="9"/>
+<rect id="side.left.2" x="86" y="185" width="60" height="78" rx="9"/>
+<rect id="side.left.3" x="20" y="271" width="60" height="78" rx="9"/>
+<rect id="side.left.4" x="86" y="271" width="60" height="78" rx="9"/>
+</g>
+<g id="side-right"><rect x="682" y="704" width="138" height="192" rx="20" stroke-width="2"/>
+<rect id="side.right.1" x="688" y="715" width="60" height="78" rx="9"/>
+<rect id="side.right.2" x="754" y="715" width="60" height="78" rx="9"/>
+<rect id="side.right.3" x="688" y="801" width="60" height="78" rx="9"/>
+<rect id="side.right.4" x="754" y="801" width="60" height="78" rx="9"/>
+</g>
+<g id="cross">
+<path id="cross.up" d="M425 814 Q450 808 475 814 Q487 817 487 831 V856 L450 884 L413 856 V831 Q413 817 425 814 Z"/>
+<path id="cross.down" d="M425 984 Q450 990 475 984 Q487 981 487 967 V942 L450 914 L413 942 V967 Q413 981 425 984 Z"/>
+<path id="cross.left" d="M365 874 Q359 899 365 924 Q368 936 382 936 H407 L435 899 L407 862 H382 Q368 862 365 874 Z"/>
+<path id="cross.right" d="M535 874 Q541 899 535 924 Q532 936 518 936 H493 L465 899 L493 862 H518 Q532 862 535 874 Z"/>
+</g></svg>

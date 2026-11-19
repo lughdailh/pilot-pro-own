@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "bindings": {
+    "side.left.1": "button.5.0",
+    "small.right": "wheel.2.1",
+    "small.left": "wheel.2.2"
+  },
+  "names": {
+    "side.left.1": "Example button"
+  },
+  "deadZone": 140,
+  "repeatInterval": 0.12,
+  "wheelStep": 1,
+  "profiles": [
+    {
+      "id": "general",
+      "name": "General",
+      "shortcuts": {}
+    },
+    {
+      "id": "finalcut",
+      "name": "Final Cut Pro",
+      "bundleID": "com.apple.FinalCutApp",
+      "shortcuts": {
+        "side.left.1": {
+          "keyCode": 49,
+          "modifiers": 0,
+          "label": "Espai"
+        }
+      }
+    }
+  ]
+}

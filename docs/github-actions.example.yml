@@ -1,0 +1,19 @@
+name: macOS build and tests
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  macos:
+    runs-on: macos-latest
+    env:
+      PILOT_BUILD_DIR: ${{ runner.temp }}/pilot-pro-own
+    steps:
+      - uses: actions/checkout@v4
+      - name: Core tests (no USB device required)
+        run: ./scripts/test.sh
+      - name: Build native app with ad-hoc signature
+        run: ./scripts/build-app.sh
+      - name: Verify bundle signature
+        run: codesign --verify --strict "$PILOT_BUILD_DIR/Pilot Pro Own.app"
