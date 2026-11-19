@@ -25,6 +25,42 @@ struct PilotPage: Codable, Identifiable, Equatable {
     var repeatInterval = 0.12
     var wheelStep = 1
     var wheelPolarity: [String: Bool]? = nil
+    var wheelCycles: [String: WheelCycle]? = nil
+    var combinations: [ControlCombination]? = nil
+    var modifierControls: Set<String> { (combinations ?? []).reduce(into: Set<String>()) { $0.formUnion($1.buttons) } }
+    func combination(for trigger: String, held: Set<String>) -> ControlCombination? {
+        (combinations ?? []).filter { $0.trigger == trigger && $0.modifiers.isSubset(of: held) }
+            .sorted { $0.modifiers.count != $1.modifiers.count ? $0.modifiers.count > $1.modifiers.count : $0.id < $1.id }.first
+    }
+    func combinationForInput(_ input: String, held: Set<String>) -> ControlCombination? {
+        let isButton = PilotControl.modifierButtons.contains { $0.id == input }
+        return (combinations ?? []).filter { combination in
+            if combination.trigger == input { return combination.modifiers.isSubset(of: held) }
+            return isButton && combination.buttons.contains(combination.trigger) && combination.buttons.contains(input) && combination.buttons.isSubset(of: held)
+        }.sorted { $0.modifiers.count != $1.modifiers.count ? $0.modifiers.count > $1.modifiers.count : $0.id < $1.id }.first
+    }
+    mutating func setCombination(trigger: String, modifiers: Set<String>, shortcut: Shortcut?) {
+        var entries = combinations ?? []
+        entries.removeAll { $0.trigger == trigger && $0.modifiers == modifiers }
+        if let shortcut { entries.append(ControlCombination(trigger: trigger, modifiers: modifiers, shortcut: shortcut)) }
+        combinations = entries.isEmpty ? nil : entries
+    }
+    func activeCycle(for wheel: String) -> WheelCycle? {
+        guard let cycle = wheelCycles?[wheel], cycle.enabled else { return nil }; return cycle
+    }
+    func cycleAction(for physicalControl: String) -> (wheel: String, cycle: WheelCycle, forward: Bool)? {
+        let parts = actionControl(for: physicalControl).split(separator: ".")
+        guard parts.count == 2, ["small", "large", "dial"].contains(String(parts[0])),
+              ["left", "right"].contains(String(parts[1])), let cycle = activeCycle(for: String(parts[0])) else { return nil }
+        return (String(parts[0]), cycle, parts[1] == "right")
+    }
+    var assignmentCount: Int {
+        var controls = Set(shortcuts.keys)
+        for wheel in ["small", "large", "dial"] where activeCycle(for: wheel) != nil {
+            controls.insert(wheel + ".left"); controls.insert(wheel + ".right")
+        }
+        return controls.count + (combinations?.count ?? 0)
+    }
     func positiveClockwise(for wheel: String) -> Bool { wheelPolarity?[wheel] ?? true }
     mutating func setPositiveClockwise(_ value: Bool, for wheel: String) {
         if wheelPolarity == nil { wheelPolarity = [:] }
@@ -47,18 +83,28 @@ struct PilotPage: Codable, Identifiable, Equatable {
     mutating func copySettings(from source: PilotPage) {
         // The destination keeps its identity and title. Copy every logical setting.
         shortcuts = source.shortcuts; names = source.names
-        deadZone = source.deadZone; repeatInterval = source.repeatInterval; wheelStep = source.wheelStep; wheelPolarity = source.wheelPolarity
+        deadZone = source.deadZone; repeatInterval = source.repeatInterval; wheelStep = source.wheelStep; wheelPolarity = source.wheelPolarity; wheelCycles = source.wheelCycles; combinations = source.combinations
     }
     mutating func copyControls(_ controls: Set<String>, from source: PilotPage) {
         for id in controls where PilotControl.all.contains(where: { $0.id == id }) {
             shortcuts[id] = source.shortcuts[id]
             names[id] = source.names[id]
         }
+        var entries = (combinations ?? []).filter { !controls.contains($0.trigger) }
+        entries += (source.combinations ?? []).filter { controls.contains($0.trigger) }
+        combinations = entries.isEmpty ? nil : entries
+        // A cycle belongs to the whole wheel, shared by its two direction targets.
+        for wheel in ["small", "large", "dial"] where controls.contains(wheel + ".left") || controls.contains(wheel + ".right") {
+            if wheelCycles == nil && source.wheelCycles?[wheel] != nil { wheelCycles = [:] }
+            wheelCycles?[wheel] = source.wheelCycles?[wheel]
+        }
     }
     var isValid: Bool {
         !id.isEmpty && !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
         (0...460).contains(deadZone) && (0.04...0.5).contains(repeatInterval) && (1...8).contains(wheelStep) &&
         (wheelPolarity?.keys.allSatisfy { ["small", "large", "dial"].contains($0) } ?? true) &&
+        (wheelCycles?.allSatisfy { ["small", "large", "dial"].contains($0.key) && $0.value.isValid } ?? true) &&
+        (combinations?.allSatisfy(\.isValid) ?? true) && Set((combinations ?? []).map(\.id)).count == (combinations?.count ?? 0) &&
         shortcuts.keys.allSatisfy { id in PilotControl.all.contains(where: { $0.id == id }) } &&
         shortcuts.values.allSatisfy(\.isValid)
     }

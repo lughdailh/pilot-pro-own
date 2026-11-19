@@ -30,6 +30,7 @@ enum MacroStep: Codable, Equatable {
 final class SequenceRunner {
     struct Job {
         var steps: [MacroStep]
+        var prepareKey: (() -> KeyStroke?)? = nil
         var validate: () -> Bool
         var emit: (KeyStroke) -> Void
         var changePage: (PageReference) -> Bool
@@ -48,6 +49,14 @@ final class SequenceRunner {
         if !isBusy { startNext() }
         return true
     }
+    // Resolve a wheel key only when its job starts. Cancelled queued ticks never move its cursor.
+    @discardableResult
+    func enqueueKey(validate: @escaping () -> Bool, resolve: @escaping () -> KeyStroke?, emit: @escaping (KeyStroke) -> Void, finished: @escaping () -> Void = {}) -> Bool {
+        guard jobs.count < 32 else { return false }
+        jobs.append(Job(steps: [], prepareKey: resolve, validate: validate, emit: emit, changePage: { _ in false }, finished: finished))
+        if !isBusy { startNext() }
+        return true
+    }
     func cancel() {
         generation &+= 1
         work?.cancel(); work = nil; jobs.removeAll()
@@ -56,7 +65,12 @@ final class SequenceRunner {
     private func startNext() {
         guard !jobs.isEmpty else { isBusy = false; onState?(false); return }
         isBusy = true; onState?(true)
-        let job = jobs.removeFirst()
+        var job = jobs.removeFirst()
+        guard job.validate() else { cancel(); return }
+        if let resolve = job.prepareKey {
+            guard let key = resolve(), key.isValid else { startNext(); return }
+            job.steps = [.key(key)]
+        }
         advance(job, index: 0, generation: generation)
     }
     private func advance(_ job: Job, index: Int, generation ticket: UInt64) {

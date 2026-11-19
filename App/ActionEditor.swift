@@ -5,11 +5,13 @@ struct ActionEditor: View {
     @Environment(\.dismiss) private var dismiss
     @State private var kind = "key"
     @State private var destination = ""
+    @State private var showMacro = false
     var pages: [PilotPage] { model.config.profiles[model.profileIndex].pages }
     var body: some View {
         VStack(spacing: 20) {
             Text("Acció del control").font(.title2.bold())
             Text("\(model.displayName(model.currentControl)) · \(model.editingPage.name)").foregroundStyle(.secondary)
+            if !model.selectedModifiers.isEmpty { Text("Mantenint: " + model.modifierSelectionLabel).font(.caption.bold()).foregroundStyle(.cyan) }
             Picker("Tipus d’acció", selection: $kind) {
                 Text("Drecera de teclat").tag("key")
                 Text("Canviar de pàgina").tag("page")
@@ -38,6 +40,9 @@ struct ActionEditor: View {
                     dismiss()
                 }.buttonStyle(.borderedProminent).disabled(!pages.contains(where: { $0.id == destination }))
             }
+            if !model.selectedModifiers.isEmpty {
+                Button("Crear seqüència de dreceres…") { showMacro = true }
+            }
             Button("Cancel·lar") { dismiss() }
         }.padding(30).frame(width: 480)
             .onAppear {
@@ -49,5 +54,6 @@ struct ActionEditor: View {
                 }
             }
             .onDisappear { model.recordingShortcut = false }
+            .sheet(isPresented: $showMacro, onDismiss: { dismiss() }) { MacroEditor(model: model) }
     }
 }

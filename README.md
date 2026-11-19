@@ -7,6 +7,8 @@ An open-source, native macOS USB controller for the **XPPen Pilot Pro** (`28bd:0
 ## Features
 
 - Three wheels with paired clockwise/anticlockwise controls on the map: white outlined circles with opaque black interiors and direction arrows. Independent positive (+) and negative (−) actions. Choose which sign clockwise rotation executes, independently for each wheel and page.
+- Optional **sequential wheel** mode: an ordered shortcut list shared by both rotation directions. Each USB wheel step emits one shortcut; positive rotation advances, negative rotation goes back. Choose circular wrapping or stop at the endpoints. Separate wheel actions are retained when switching modes.
+- Held-button combinations: give a wheel direction, button or joystick direction an alternate shortcut, page change or macro while one or more physical buttons are held. The most specific matching combination wins. Individual taps of buttons participating in a combination wait until release; using the combination suppresses their individual tap action.
 - Eight side buttons (four on each side), four lower directional buttons, the joystick button and the small-wheel button.
 - Eight exclusive joystick directions, including four independent diagonals that default to no action, with a **percentage dead zone**, 0.5 percentage-point slider increments, numeric entry and a live preview.
 - Named pages such as **Timeline** and **Browser**, with independent shortcuts, macros, control names and response settings.
@@ -45,6 +47,12 @@ Page changes update the assignments used at runtime. To also focus a Final Cut p
 
 A diagonal emits only its own action, never both cardinal actions. Its physical identification is derived from the calibrated cardinal axes, and new diagonals start unassigned.
 
+To create a combination, ⌘-click two or more map controls, right-click a selected control and choose **Crear combinació…**. The inspector switches to its **Combinacions** tab and opens the action editor, where you can assign a shortcut, page change or multi-step macro. Its **Dreceres** tab always edits the normal action. With a wheel/joystick plus buttons, hold the buttons while moving the wheel/joystick. A pair of buttons works in either press order. At most one moving control can participate in a combination. Combinations are page-specific and included in whole-page and selected-control copies. A matching combination overrides a wheel's normal or sequential action without advancing its cycle. The wheel's polarity still determines the logical direction. Wheel combinations use every reported step.
+
+The outer ring's two map targets are **Roda gran exterior**; the inner rotating joystick targets are **Roda del joystick**. These match the existing `large` and `dial` logical identifiers respectively.
+
+To configure a sequential wheel, click either direction circle, choose **Mode de la roda → Roda seqüencial**, add shortcuts in order, and save. This sends one entry per wheel step, rather than playing the entire list as a macro. With shortcuts A, B and C, positive ticks send A → B → C, and reversing after C sends B → A. The first negative tick on a fresh cycle starts at the last entry. Sequential mode uses every reported step and bypasses the normal wheel-step filter. Rotation polarity determines which physical direction advances. Positions are independent per profile, page and wheel; they are session-only and reset when activating/reconnecting or editing that page. Use **Reiniciar recorregut** to reset one wheel explicitly. Copying a wheel direction also copies its shared sequential-mode settings.
+
 Each page has its own dead zone, repeat interval, wheel-step filter and independent wheel polarity settings. The dead zone is measured independently on each axis; the preview shows the central area that ignores small movements. Existing configurations keep their previous threshold when displayed as a percentage.
 
 Macros execute sequentially without interleaving their steps. An explicit page-change step continues the same sequence on the destination page; a manual page change, application change, disconnection, sleep or controller stop cancels it. If a referenced page is unavailable, execution stops before later keys are emitted. Page references survive renaming; when copied to a different profile, a corresponding page can be resolved by its title. A 50 ms delay is an initial value; some workflows need a longer pause.
@@ -65,7 +73,7 @@ Schema version 1 configurations migrate to version 2 pages with an automatic bac
 ./scripts/test.sh
 ```
 
-Core tests run without a connected controller. They cover input parsing and button transitions, sanitized USB report replay, profile/page migration and copying, percentage dead-zone boundaries, macro persistence, delay scheduling and cancellation. A GitHub Actions workflow template is provided in `docs/github-actions.example.yml`. To enable it, copy it to `.github/workflows/ci.yml` using a GitHub session with workflow-write permission. Automated CI is not enabled in this initial publication.
+Core tests run without a connected controller. They cover input parsing and button transitions, sanitized USB report replay, profile/page migration and copying, percentage dead-zone boundaries, macro persistence, delay scheduling and cancellation, bidirectional wheel cycles, endpoint handling, mode persistence and deferred execution/cancellation of queued wheel ticks, combination matching, modifier tap deferral and suppression, and combination persistence/copying. A GitHub Actions workflow template is provided in `docs/github-actions.example.yml`. To enable it, copy it to `.github/workflows/ci.yml` using a GitHub session with workflow-write permission. Automated CI is not enabled in this initial publication.
 
 ## Validation and current limits
 

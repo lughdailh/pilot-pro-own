@@ -36,6 +36,9 @@ struct PilotControl: Identifiable {
     let group: String
     var opposite: String? = nil
 
+    static func wheelName(_ id: String) -> String {
+        ["small": "Roda petita", "large": "Roda gran exterior", "dial": "Roda del joystick"][id] ?? id
+    }
     static let diagonals: [(id: String, vertical: String, horizontal: String, name: String, symbol: String)] = [
         ("stick.up-left", "stick.up", "stick.left", "amunt i esquerra", "arrow.up.left"),
         ("stick.up-right", "stick.up", "stick.right", "amunt i dreta", "arrow.up.right"),
@@ -58,7 +61,8 @@ struct PilotControl: Identifiable {
             PilotControl(id: "joystick.press", name: "Botó del joystick", symbol: "button.programmable", group: "Botons addicionals"),
             PilotControl(id: "small.press", name: "Botó de la roda petita", symbol: "button.programmable.square", group: "Botons addicionals")
         ]
-        for (id, name) in [("small", "Roda petita"), ("large", "Roda gran"), ("dial", "Tercera roda")] {
+        for id in ["small", "large", "dial"] {
+            let name = wheelName(id)
             result.append(PilotControl(id: "\(id).right", name: "\(name) · sentit horari", symbol: "arrow.clockwise", group: "Rodes", opposite: "\(id).left"))
             result.append(PilotControl(id: "\(id).left", name: "\(name) · sentit antihorari", symbol: "arrow.counterclockwise", group: "Rodes", opposite: "\(id).right"))
         }
@@ -70,6 +74,7 @@ struct PilotControl: Identifiable {
         }
         return result
     }()
+    static let modifierButtons = all.filter { $0.id.hasPrefix("side.") || $0.id.hasPrefix("cross.") || $0.id.hasSuffix(".press") }
     static let calibration = all.filter { !$0.isDiagonal && !(["small.left", "large.left", "dial.left", "stick.down", "stick.right"].contains($0.id)) }
     // All buttons, clockwise for each wheel, then up and left for the joystick.
 }

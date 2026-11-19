@@ -5,6 +5,8 @@ struct ContentView: View {
     @ObservedObject var model: PilotModel
     @State private var showRecorder = false
     @State private var showMacro = false
+    @State private var showWheelCycle = false
+    @State private var inspectorTab = "shortcuts"
     @State private var pageOperation: PageOperation?
     @State private var showPageCopy = false
     @Environment(\.openWindow) private var openWindow
@@ -54,9 +56,12 @@ struct ContentView: View {
         }
         .background(Color(nsColor: .windowBackgroundColor))
         .preferredColorScheme(.dark)
-        .onChange(of: model.editingProfile) { _, _ in model.clearInput(); model.cancelLearning(); model.selectedControls = [model.selected] }
+        .onChange(of: model.combinationEditorRequest) { _, _ in inspectorTab = "combinations"; showRecorder = true }
+        .onChange(of: model.selectedModifiers) { _, modifiers in if !modifiers.isEmpty { inspectorTab = "combinations" } }
+        .onChange(of: model.editingProfile) { _, _ in model.clearInput(); model.cancelLearning(); model.selectedControls = [model.selected]; model.selectedModifiers = [] }
         .sheet(item: $pageOperation) { PageNameEditor(model: model, operation: $0) }
         .sheet(isPresented: $showPageCopy) { PageCopyEditor(model: model) }
+        .sheet(isPresented: $showWheelCycle) { if let wheel = model.selectedWheel { WheelCycleEditor(model: model, wheel: wheel) } }
         .sheet(isPresented: $showMacro) { MacroEditor(model: model) }
         .sheet(item: $model.controlsToCopy) { ControlCopyEditor(model: model, request: $0) }
         .sheet(isPresented: $showRecorder) { ActionEditor(model: model) }
@@ -67,7 +72,7 @@ struct ContentView: View {
                 Image(systemName: "dial.high.fill").font(.system(size: 30)).foregroundStyle(.cyan)
                 VStack(alignment: .leading) {
                     Text("PILOT OWN").font(.headline)
-                    Text("Controlador USB · 0.4.3").font(.caption).foregroundStyle(.secondary)
+                    Text("Controlador USB · 0.5.1").font(.caption).foregroundStyle(.secondary)
                 }
             }
             Divider()
@@ -127,7 +132,7 @@ struct ContentView: View {
             Picker("Pàgina", selection: Binding(get: { model.editingPage.id }, set: { model.selectPage($0) })) {
                 ForEach(model.config.profiles[model.profileIndex].pages) { Text($0.name).tag($0.id) }
             }.labelsHidden().frame(minWidth: 160, maxWidth: 240)
-            Text("\(model.editingPage.shortcuts.count) assignacions").font(.caption).foregroundStyle(.secondary)
+            Text("\(model.editingPage.assignmentCount) assignacions").font(.caption).foregroundStyle(.secondary)
             Spacer()
             Menu {
                 Button("Nova pàgina…") { pageOperation = .create }
@@ -161,49 +166,125 @@ struct ContentView: View {
                     Text(model.currentControl.group).font(.caption).foregroundStyle(.secondary)
                 }
                 Text(model.displayName(model.currentControl)).font(.title2.bold())
-                if let wheel = model.selectedWheel {
+                Picker("Inspector", selection: Binding(get: { inspectorTab }, set: { tab in
+                    inspectorTab = tab
+                    if tab == "shortcuts" { model.selectModifiers([]) }
+                })) {
+                    Text("Dreceres").tag("shortcuts")
+                    Text("Combinacions").tag("combinations")
+                }.pickerStyle(.segmented)
+                if inspectorTab == "combinations" { combinationsInspector }
+                if inspectorTab == "shortcuts", let wheel = model.selectedWheel {
                     Picker("Acció de la roda", selection: Binding(get: { model.selected }, set: { model.cancelLearning(); model.selected = $0 })) {
                         Text("↺ Antihorari").tag(model.editingPage.actionControl(for: wheel + ".left"))
                         Text("↻ Horari").tag(model.editingPage.actionControl(for: wheel + ".right"))
                     }.pickerStyle(.segmented)
                 }
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Acció · \(model.editingPage.name)").font(.headline)
-                    Button {
-                        if model.shortcut?.isSequence == true { showMacro = true }
-                        else { model.recordingShortcut = true; showRecorder = true }
-                    } label: {
-                        HStack {
-                            Text(model.shortcut?.displayLabel ?? "Sense drecera").font(.system(size: 26, weight: .medium, design: .rounded))
-                            Spacer(minLength: 8)
-                            Image(systemName: "pencil").font(.callout).foregroundStyle(.cyan)
-                        }.frame(maxWidth: .infinity).padding(16)
-                            .background(.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 10))
-                            .contentShape(Rectangle())
-                    }.buttonStyle(.plain).help("Clica per assignar una drecera o una pàgina")
-                    if let shortcut = model.shortcut {
-                        Text("Etiqueta").font(.caption).foregroundStyle(.secondary)
-                        TextField("Etiqueta de l’acció", text: Binding(get: { model.shortcut?.displayLabel ?? "" }, set: { model.setActionLabel($0) }))
-                            .textFieldStyle(.roundedBorder).accessibilityLabel("Etiqueta de l’acció")
-                        if shortcut.customLabel != nil && shortcut.displayLabel != shortcut.label {
-                            Text(shortcut.label).font(.caption).foregroundStyle(.secondary)
-                            Button("Restablir etiqueta automàtica") { model.setActionLabel("") }.font(.caption).buttonStyle(.link)
+                if inspectorTab == "shortcuts" && model.selectedWheel != nil {
+                    Picker("Mode de la roda", selection: Binding(get: { model.selectedCycle?.enabled == true }, set: { enabled in
+                        if enabled && model.selectedCycle == nil { showWheelCycle = true }
+                        else { model.setWheelCycleEnabled(enabled) }
+                    })) {
+                        Text("Accions separades").tag(false)
+                        Text("Roda seqüencial").tag(true)
+                    }.pickerStyle(.menu)
+                }
+                if inspectorTab == "shortcuts", let cycle = model.selectedCycle, cycle.enabled {
+                    cycleInspector(cycle)
+                } else if inspectorTab == "shortcuts" || !model.selectedModifiers.isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("\(inspectorTab == "combinations" ? "Acció de la combinació" : "Acció") · \(model.editingPage.name)").font(.headline)
+                        Button {
+                            if model.shortcut?.isSequence == true { showMacro = true }
+                            else { model.recordingShortcut = true; showRecorder = true }
+                        } label: {
+                            HStack {
+                                Text(model.shortcut?.displayLabel ?? "Sense drecera").font(.system(size: 26, weight: .medium, design: .rounded))
+                                Spacer(minLength: 8)
+                                Image(systemName: "pencil").font(.callout).foregroundStyle(.cyan)
+                            }.frame(maxWidth: .infinity).padding(16)
+                                .background(.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 10))
+                                .contentShape(Rectangle())
+                        }.buttonStyle(.plain).help("Clica per assignar una drecera o una pàgina")
+                        if let shortcut = model.shortcut {
+                            Text("Etiqueta").font(.caption).foregroundStyle(.secondary)
+                            TextField("Etiqueta de l’acció", text: Binding(get: { model.shortcut?.displayLabel ?? "" }, set: { model.setActionLabel($0) }))
+                                .textFieldStyle(.roundedBorder).accessibilityLabel("Etiqueta de l’acció")
+                            if shortcut.customLabel != nil && shortcut.displayLabel != shortcut.label {
+                                Text(shortcut.label).font(.caption).foregroundStyle(.secondary)
+                                Button("Restablir etiqueta automàtica") { model.setActionLabel("") }.font(.caption).buttonStyle(.link)
+                            }
+                            Button("Esborrar acció") { model.setShortcut(nil) }.buttonStyle(.link)
                         }
-                        Button("Esborrar acció") { model.setShortcut(nil) }.buttonStyle(.link)
-                    }
-                    Button {
-                        showMacro = true
-                    } label: { Label(model.shortcut?.isSequence == true ? "Editar seqüència…" : "Crear seqüència…", systemImage: "list.number") }
-                    if model.shortcut?.isSequence == true, let steps = model.shortcut?.sequence {
-                        Text("Macro de \(steps.count) passos · pauses configurables").font(.caption).foregroundStyle(.cyan)
+                        Button {
+                            showMacro = true
+                        } label: { Label(model.shortcut?.isSequence == true ? "Editar seqüència…" : "Crear seqüència…", systemImage: "list.number") }
+                        if model.shortcut?.isSequence == true, let steps = model.shortcut?.sequence {
+                            Text("Macro de \(steps.count) passos · pauses configurables").font(.caption).foregroundStyle(.cyan)
+                        }
                     }
                 }
-                if model.selectedWheel != nil || model.selectedJoystick {
+                if inspectorTab == "shortcuts" && (model.selectedWheel != nil || model.selectedJoystick) {
                     Divider()
                     responseSettings
                 }
             }.padding(18)
         }.background(.white.opacity(0.035), in: RoundedRectangle(cornerRadius: 16))
+    }
+    private var combinationsInspector: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            let entries = (model.editingPage.combinations ?? []).filter { $0.trigger == model.selected || $0.modifiers.contains(model.selected) }
+            Text("Selecciona dos o més controls al mapa amb ⌘-clic i fes botó dret → Crear combinació…").font(.caption).foregroundStyle(.secondary)
+            ForEach(entries) { combination in
+                Button { model.editCombination(combination) } label: {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(([combination.trigger] + combination.modifiers.sorted()).map { id in
+                            model.editingPage.names[id] ?? PilotControl.all.first(where: { $0.id == id })?.name ?? id
+                        }.joined(separator: " + ")).font(.caption)
+                        Text(combination.shortcut.displayLabel).font(.callout.bold())
+                    }.frame(maxWidth: .infinity, alignment: .leading).padding(10)
+                        .background(model.selectedModifiers == combination.modifiers && model.selected == combination.trigger ? Color.cyan.opacity(0.15) : Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
+                }.buttonStyle(.plain)
+            }
+            if model.selectedModifiers.isEmpty {
+                if entries.isEmpty { Text("Aquest control encara no té combinacions.").font(.callout).foregroundStyle(.secondary) }
+            } else {
+                Label(model.modifierSelectionLabel, systemImage: "hand.point.up.left").font(.caption.bold()).foregroundStyle(.cyan)
+                Text(PilotControl.modifierButtons.contains(where: { $0.id == model.selected }) ? "Prem els botons junts, en qualsevol ordre. L’acció individual només s’envia si els deixes anar sense fer servir la combinació." : "Mantén aquests botons premuts mentre utilitzes el control. La seva acció individual només s’envia si els deixes anar sense fer servir la combinació.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+        }
+    }
+    private func cycleInspector(_ cycle: WheelCycle) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Una drecera per pas · \(model.editingPage.name)").font(.headline)
+            Button { showWheelCycle = true } label: {
+                HStack {
+                    Text(cycle.name).font(.title2.bold())
+                    Spacer(minLength: 8)
+                    Image(systemName: "pencil").foregroundStyle(.cyan)
+                }.frame(maxWidth: .infinity).padding(14).background(.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 10))
+            }.buttonStyle(.plain).help("Editar el recorregut de la roda")
+            Text("\(cycle.keys.count) dreceres · \(cycle.wraps ? "recorregut circular" : "s’atura als extrems")").font(.caption).foregroundStyle(.secondary)
+            if let position = model.cyclePosition, cycle.keys.indices.contains(position) {
+                Text("Últim pas: \(position + 1)/\(cycle.keys.count) · \(cycle.keys[position].label)").font(.callout.bold()).foregroundStyle(.cyan)
+            } else {
+                Text("A punt: + comença pel primer pas; −, per l’últim.").font(.caption).foregroundStyle(.secondary)
+            }
+            ForEach(Array(cycle.keys.prefix(5).enumerated()), id: \.offset) { index, key in
+                HStack {
+                    Text("\(index + 1)").font(.system(.caption, design: .monospaced)).foregroundStyle(.secondary).frame(width: 20)
+                    Text(key.label).font(.callout)
+                    Spacer()
+                    if model.cyclePosition == index { Image(systemName: "arrow.left").foregroundStyle(.cyan) }
+                }
+            }
+            if cycle.keys.count > 5 { Text("I \(cycle.keys.count - 5) més…").font(.caption).foregroundStyle(.secondary) }
+            Button("Editar recorregut…") { showWheelCycle = true }
+            Button("Reiniciar recorregut") { model.resetWheelCycle() }.buttonStyle(.link)
+            Text("Les accions separades queden desades per si tornes a aquell mode. La posició es conserva per roda i pàgina mentre el controlador està actiu; s’inicia de nou en activar-lo o editar la configuració.")
+                .font(.caption).foregroundStyle(.secondary)
+        }
     }
     private var responseSettings: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -213,8 +294,12 @@ struct ContentView: View {
                     Text("Positiu (+)").tag(true)
                     Text("Negatiu (−)").tag(false)
                 }
-                Text("El sentit contrari executa l’altra acció. Defineix una drecera, pàgina o seqüència per a cada signe.").font(.caption).foregroundStyle(.secondary)
-                Stepper("Filtre de rodes: 1 acció / \(model.editingPage.wheelStep) passos", value: Binding(get: { model.editingPage.wheelStep }, set: { let value = $0; model.updatePage { $0.wheelStep = value } }), in: 1...8).font(.caption)
+                if model.selectedCycle?.enabled == true {
+                    Text(model.editingPage.positiveClockwise(for: wheel) ? "↻ Avança · ↺ Retrocedeix. Cada pas físic envia una drecera." : "↺ Avança · ↻ Retrocedeix. Cada pas físic envia una drecera.").font(.caption).foregroundStyle(.secondary)
+                } else {
+                    Text("El sentit contrari executa l’altra acció. Defineix una drecera, pàgina o seqüència per a cada signe.").font(.caption).foregroundStyle(.secondary)
+                    Stepper("Filtre de rodes: 1 acció / \(model.editingPage.wheelStep) passos", value: Binding(get: { model.editingPage.wheelStep }, set: { let value = $0; model.updatePage { $0.wheelStep = value } }), in: 1...8).font(.caption)
+                }
             }
             if model.selectedJoystick {
                 Text("Resposta del joystick").font(.headline)
@@ -285,10 +370,10 @@ struct PilotDiagram: View {
                 target("small.press", label: "●", x: 450, y: 207, width: 65, height: 65, scale: scale)
                 wheelTarget("small", clockwise: false, x: 350, y: 207, scale: scale)
                 wheelTarget("small", clockwise: true, x: 550, y: 207, scale: scale)
-                wheelTarget("large", clockwise: false, x: 330, y: 365, scale: scale)
-                wheelTarget("large", clockwise: true, x: 570, y: 365, scale: scale)
-                wheelTarget("dial", clockwise: false, x: 210, y: 510, scale: scale)
-                wheelTarget("dial", clockwise: true, x: 690, y: 510, scale: scale)
+                wheelTarget("dial", clockwise: false, x: 330, y: 365, scale: scale)
+                wheelTarget("dial", clockwise: true, x: 570, y: 365, scale: scale)
+                wheelTarget("large", clockwise: false, x: 210, y: 510, scale: scale)
+                wheelTarget("large", clockwise: true, x: 690, y: 510, scale: scale)
                 target("joystick.press", label: "●", x: 450, y: 510, width: 100, height: 100, scale: scale)
                 target("stick.up", label: "↑", x: 450, y: 412, width: 50, height: 50, scale: scale)
                 target("stick.down", label: "↓", x: 450, y: 607, width: 50, height: 50, scale: scale)
@@ -308,7 +393,7 @@ struct PilotDiagram: View {
     private func wheelTarget(_ wheel: String, clockwise: Bool, x: Double, y: Double, scale: Double) -> some View {
         let physical = wheel + (clockwise ? ".right" : ".left")
         let logical = model.editingPage.actionControl(for: physical)
-        let wheelName = wheel == "small" ? "Roda petita" : wheel == "large" ? "Roda gran" : "Tercera roda"
+        let wheelName = PilotControl.wheelName(wheel)
         let title = wheelName + (clockwise ? " · gir horari" : " · gir antihorari")
         return WheelDirectionTarget(clockwise: clockwise, title: title, diameter: 72 * scale,
                                     selected: model.selectedControls.contains(logical), mapped: model.config.bindings[physical] != nil) {
@@ -331,6 +416,8 @@ struct PilotDiagram: View {
         Button(model.selectedControls.contains(id) && model.selectedControls.count > 1 ? "Treure de la selecció" : "Afegir a la selecció") { model.toggleSelection(id) }
         Button("Seleccionar només aquest control") { model.selectControl(id) }
         Divider()
+        Button("Crear combinació…") { model.beginCombinationFromMap() }
+            .disabled(!model.selectedControls.contains(id) || CombinationSelection(controls: model.selectedControls, primary: model.selected) == nil)
         Button(count == 1 ? "Copiar aquest control a…" : "Copiar els \(count) controls a…") { model.requestControlCopy(id) }
     }
 }

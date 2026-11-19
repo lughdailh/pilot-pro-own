@@ -5,9 +5,14 @@ import ApplicationServices
 final class PilotModel: ObservableObject {
     @Published var config = PilotConfiguration()
     @Published var selected = "side.left.1" {
-        didSet { if !selectedControls.contains(selected) { selectedControls = [selected] } }
+        didSet {
+            if oldValue != selected { selectedModifiers = [] }
+            if !selectedControls.contains(selected) { selectedControls = [selected] }
+        }
     }
     @Published var selectedControls: Set<String> = ["side.left.1"]
+    @Published var selectedModifiers = Set<String>()
+    @Published var combinationEditorRequest = 0
     @Published var controlsToCopy: ControlCopyRequest?
     @Published var editingProfile = "finalcut"
     @Published var connected = false
@@ -28,6 +33,7 @@ final class PilotModel: ObservableObject {
     @Published var recordingShortcut = false
     @Published var macroRunning = false
     private var input = PilotInputState()
+    private var modifierInput = ModifierInputState()
     private var sequences = SequenceRunner()
     private var link = HIDLink()
     private var timer: Timer?
@@ -36,6 +42,7 @@ final class PilotModel: ObservableObject {
     private var lastRepeat = Date.distantPast
     private var saveAllowed = true
     private var restarting = false
+    @Published private(set) var wheelPositions = WheelCycleState()
     private var wheelCounter: [String: Int] = [:]
     private let source = CGEventSource(stateID: .privateState)
     let folder: URL
@@ -46,17 +53,29 @@ final class PilotModel: ObservableObject {
     var pageIndex: Int { config.profiles[profileIndex].pageIndex }
     var editingPage: PilotPage { config.profiles[profileIndex].activePage }
     var activePage: PilotPage { activeProfile.activePage }
-    var shortcut: Shortcut? { editingPage.shortcuts[selected] }
+    var shortcut: Shortcut? {
+        selectedModifiers.isEmpty ? editingPage.shortcuts[selected] : editingPage.combinations?.first { $0.trigger == selected && $0.modifiers == selectedModifiers }?.shortcut
+    }
+    var heldButtonControls: Set<String> { Set(config.bindings.filter { $0.value.hasPrefix("button.") && heldTokens.contains($0.value) }.keys) }
+    var modifierSelectionLabel: String {
+        selectedModifiers.isEmpty ? "Sense combinació" : PilotControl.modifierButtons.filter { selectedModifiers.contains($0.id) }.map { editingPage.names[$0.id] ?? $0.name }.joined(separator: " + ")
+    }
+    func selectModifiers(_ modifiers: Set<String>) { clearInput(); selectedModifiers = modifiers }
+    func matchingCombination(_ token: String) -> ControlCombination? {
+        guard let physical = config.bindings.first(where: { $0.value == token })?.key else { return nil }
+        return menuProfile.activePage.combinationForInput(menuProfile.activePage.actionControl(for: physical), held: heldButtonControls)
+    }
     var menuProfile: PilotProfile { activeBundle == Bundle.main.bundleIdentifier ? config.profiles[profileIndex] : activeProfile }
     func updatePage(_ change: (inout PilotPage) -> Void) {
         clearInput()
+        wheelPositions.reset(profile: editingProfile, page: editingPage.id)
         change(&config.profiles[profileIndex].pages[pageIndex]); save()
     }
     func selectPage(_ pageID: String, profileID: String? = nil) {
         guard !recordingShortcut else { return }
         let id = profileID ?? editingProfile
         guard let p = config.profiles.firstIndex(where: { $0.id == id }), config.profiles[p].pages.contains(where: { $0.id == pageID }) else { return }
-        clearInput(); cancelLearning(); selectedControls = [selected]
+        clearInput(); cancelLearning(); selectedControls = [selected]; selectedModifiers = []
         config.profiles[p].activePageID = pageID; save()
         log("Pàgina activa: \(config.profiles[p].name) · \(config.profiles[p].activePage.name)")
     }
@@ -100,6 +119,19 @@ final class PilotModel: ObservableObject {
             selectedControls.insert(id); selected = id
         }
     }
+    func beginCombinationFromMap() {
+        guard let selection = CombinationSelection(controls: selectedControls, primary: selected) else { return }
+        clearInput(); cancelLearning()
+        selected = selection.trigger
+        selectedModifiers = selection.modifiers
+        selectedControls = selection.modifiers.union([selection.trigger])
+        combinationEditorRequest += 1
+    }
+    func editCombination(_ combination: ControlCombination) {
+        clearInput(); cancelLearning()
+        selected = combination.trigger; selectedModifiers = combination.modifiers
+        selectedControls = combination.modifiers.union([combination.trigger])
+    }
     func requestControlCopy(_ id: String) {
         if !selectedControls.contains(id) { selectControl(id) }
         controlsToCopy = ControlCopyRequest(controls: selectedControls, source: editingPage, profileName: config.profiles[profileIndex].name)
@@ -108,6 +140,7 @@ final class PilotModel: ObservableObject {
         guard let p = config.profiles.firstIndex(where: { $0.id == profileID }),
               let page = config.profiles[p].pages.firstIndex(where: { $0.id == pageID }), pageID != request.source.id else { return }
         clearInput()
+        wheelPositions.reset(profile: profileID, page: pageID)
         config.profiles[p].pages[page].copyControls(request.controls, from: request.source)
         save()
         log("Copiats \(request.controls.count) controls a \(config.profiles[p].name) · \(config.profiles[p].pages[page].name)")
@@ -168,12 +201,27 @@ final class PilotModel: ObservableObject {
         guard parts.count == 2, ["small", "large", "dial"].contains(String(parts[0])), ["left", "right"].contains(String(parts[1])) else { return nil }
         return String(parts[0])
     }
+    var selectedCycle: WheelCycle? { selectedWheel.flatMap { editingPage.wheelCycles?[$0] } }
+    var cycleContext: WheelCycleContext? { selectedWheel.map { WheelCycleContext(profile: editingProfile, page: editingPage.id, wheel: $0) } }
+    var cyclePosition: Int? { cycleContext.flatMap { wheelPositions.position(for: $0) } }
+    func setWheelCycle(_ cycle: WheelCycle, wheel: String) {
+        guard cycle.isValid, ["small", "large", "dial"].contains(wheel) else { return }
+        updatePage { if $0.wheelCycles == nil { $0.wheelCycles = [:] }; $0.wheelCycles?[wheel] = cycle }
+    }
+    func setWheelCycleEnabled(_ enabled: Bool) {
+        guard let wheel = selectedWheel, var cycle = selectedCycle else { return }
+        cycle.enabled = enabled; setWheelCycle(cycle, wheel: wheel)
+    }
+    func resetWheelCycle() {
+        guard let context = cycleContext else { return }
+        clearInput(); wheelPositions.reset(context)
+    }
     var selectedJoystick: Bool { selected.hasPrefix("stick.") || selected == "joystick.press" }
     func displayName(_ control: PilotControl) -> String {
         if let name = editingPage.names[control.id] { return name }
         let parts = control.id.split(separator: ".")
         if parts.count == 2, ["small", "large", "dial"].contains(String(parts[0])), ["left", "right"].contains(String(parts[1])) {
-            let wheel = parts[0] == "small" ? "Roda petita" : parts[0] == "large" ? "Roda gran" : "Tercera roda"
+            let wheel = PilotControl.wheelName(String(parts[0]))
             return wheel + (parts[1] == "right" ? " · positiu (+)" : " · negatiu (−)")
         }
         return control.name
@@ -195,7 +243,7 @@ final class PilotModel: ObservableObject {
         guard !restarting else { return }
         restarting = true
         enabled = false
-        clearInput()
+        clearInput(); wheelPositions.reset()
         if let message = link.start(exclusive: false) { error = message }
         connected = link.connected
         status = connected ? "Pilot Pro USB connectat · mode monitor" : "Connecta el Pilot Pro per USB"
@@ -206,7 +254,7 @@ final class PilotModel: ObservableObject {
         resetInputState()
     }
     private func resetInputState() {
-        input.reset(); heldTokens = []; joystickX = 0; joystickY = 0
+        input.reset(); modifierInput.reset(); heldTokens = []; joystickX = 0; joystickY = 0
         stickLastReport = .distantPast; lastRepeat = .distantPast; wheelCounter = [:]
     }
     func activate() {
@@ -216,7 +264,7 @@ final class PilotModel: ObservableObject {
         guard accessibility else { requestAccessibility(); error = "Activa Pilot Pro Own a Accessibilitat i torna a prémer Activar."; return }
         guard !config.bindings.isEmpty else { error = "Identifica com a mínim un control físic abans d’activar les dreceres."; return }
         learning = nil; wizard = false; learnedNotice = nil
-        clearInput()
+        clearInput(); wheelPositions.reset()
         if let message = link.start(exclusive: true) {
             monitor(); error = message; return
         }
@@ -309,28 +357,49 @@ final class PilotModel: ObservableObject {
         setShortcut(value)
     }
     func setShortcut(_ value: Shortcut?) {
-        updatePage { $0.shortcuts[selected] = value }
+        updatePage {
+            if selectedModifiers.isEmpty { $0.shortcuts[selected] = value }
+            else { $0.setCombination(trigger: selected, modifiers: selectedModifiers, shortcut: value) }
+        }
     }
     func receive(_ bytes: [UInt8]) {
         reportCount += 1
         guard let packet = PilotPacket.decode(bytes) else { return }
         switch packet {
         case .buttons(let current):
+            let released = input.buttons.subtracting(current)
             let pressed = input.transitions(to: current)
             heldTokens = heldTokens.filter { !$0.hasPrefix("button.") }.union(current)
             if let learning, (learning.hasPrefix("side.") || learning.hasPrefix("cross.") || learning.hasSuffix(".press")), current.count == 1, pressed.count == 1 {
                 acceptLearning(pressed[0])
-            } else if self.learning == nil && !wizard {
-                for token in pressed { trigger(token) }
+            } else if self.learning == nil && !wizard && !recordingShortcut {
+                if enabled {
+                    for token in pressed {
+                        if let control = config.bindings.first(where: { $0.value == token })?.key,
+                           menuProfile.activePage.modifierControls.contains(control) { modifierInput.deferPress(token) }
+                    }
+                }
+                let eventProfile = menuProfile.id
+                let eventPage = menuProfile.activePage.id
+                for token in pressed where !modifierInput.isConsumed(token) {
+                    guard menuProfile.id == eventProfile, menuProfile.activePage.id == eventPage else { break }
+                    if matchingCombination(token) != nil {
+                        modifierInput.consume([token]); trigger(token)
+                    } else if !modifierInput.isPending(token) { trigger(token) }
+                }
+                for token in modifierInput.release(released) { trigger(token, ignoringCombinations: true) }
             }
             if !current.isEmpty { lastInput = current.sorted().joined(separator: " + ") }
         case .wheel(let id, let direction):
             let token = "wheel.\(id).\(direction)"
             lastInput = "Roda \(id) · sentit \(direction)"
             if let learning, ["small.right", "large.right", "dial.right", "small.left", "large.left", "dial.left"].contains(learning) { acceptLearning(token) }
-            else if self.learning == nil && !wizard {
+            else if self.learning == nil && !wizard && !recordingShortcut {
+                let page = menuProfile.activePage
+                let physical = config.bindings.first(where: { $0.value == token })?.key ?? ""
+                let threshold = page.cycleAction(for: physical) != nil || matchingCombination(token) != nil ? 1 : page.wheelStep
                 wheelCounter[token, default: 0] += 1
-                if wheelCounter[token, default: 0] >= activePage.wheelStep { wheelCounter[token] = 0; trigger(token) }
+                if wheelCounter[token, default: 0] >= threshold { wheelCounter[token] = 0; trigger(token) }
             }
         case .joystick(let x, let y):
             joystickX = x; joystickY = y
@@ -354,18 +423,27 @@ final class PilotModel: ObservableObject {
         lastRepeat = now
         for token in heldTokens.sorted() where token.hasPrefix("stick.") { trigger(token) }
     }
-    func trigger(_ token: String) {
+    func trigger(_ token: String, ignoringCombinations: Bool = false) {
         guard enabled, !recordingShortcut, learning == nil, !wizard, accessibility,
               let physicalControl = config.resolvedBindings.first(where: { $0.value == token })?.key else { return }
         let context = menuProfile
-        let control = context.activePage.actionControl(for: physicalControl)
-        guard let shortcut = context.activePage.shortcuts[control] else { return }
+        let physicalAction = context.activePage.actionControl(for: physicalControl)
+        let combination = ignoringCombinations ? nil : context.activePage.combinationForInput(physicalAction, held: heldButtonControls)
+        let control = combination?.trigger ?? physicalAction
+        if combination == nil, let action = context.activePage.cycleAction(for: physicalControl) {
+            triggerCycle(action.cycle, forward: action.forward, wheel: action.wheel, profile: context)
+            return
+        }
+        guard let shortcut = combination?.shortcut ?? context.activePage.shortcuts[control] else { return }
         if activeBundle == Bundle.main.bundleIdentifier && shortcut.effectiveSteps.contains(where: { if case .key = $0 { return true }; return false }) { return }
         let targetBundle = activeBundle
         let profileID = context.id
         let profileName = context.name
         var expectedPage = context.activePage.id
         let controlName = context.activePage.names[control] ?? PilotControl.all.first(where: { $0.id == control })?.name ?? control
+        if let combination {
+            modifierInput.consume(Set(combination.buttons.compactMap { config.bindings[$0] }))
+        }
         let accepted = sequences.enqueue(steps: shortcut.effectiveSteps, validate: { [weak self] in
             guard let self else { return false }
             return self.enabled && self.accessibility && !self.recordingShortcut && self.learning == nil && !self.wizard && self.activeBundle == targetBundle && self.menuProfile.id == profileID && self.menuProfile.activePage.id == expectedPage
@@ -380,6 +458,26 @@ final class PilotModel: ObservableObject {
             self?.log("\(profileName): \(controlName) → \(shortcut.displayLabel)")
         })
         if !accepted { log("Seqüència ignorada: cua plena") }
+    }
+    private func triggerCycle(_ cycle: WheelCycle, forward: Bool, wheel: String, profile: PilotProfile) {
+        guard activeBundle != Bundle.main.bundleIdentifier else { return }
+        let targetBundle = activeBundle
+        let context = WheelCycleContext(profile: profile.id, page: profile.activePage.id, wheel: wheel)
+        var emittedLabel = ""
+        let accepted = sequences.enqueueKey(validate: { [weak self] in
+            guard let self else { return false }
+            return self.enabled && self.accessibility && !self.recordingShortcut && self.learning == nil && !self.wizard && self.activeBundle == targetBundle && self.menuProfile.id == context.profile && self.menuProfile.activePage.id == context.page
+        }, resolve: { [weak self] in
+            self?.wheelPositions.next(in: cycle, forward: forward, context: context)
+        }, emit: { [weak self] key in
+            emittedLabel = key.label
+            self?.emitKey(key)
+        }, finished: { [weak self] in
+            guard let self else { return }
+            let position = (self.wheelPositions.position(for: context) ?? 0) + 1
+            self.log("\(profile.name): \(cycle.name) · \(position)/\(cycle.keys.count) → \(emittedLabel)")
+        })
+        if !accepted { log("Pas de roda ignorat: cua plena") }
     }
     private func performPageStep(_ reference: PageReference, profileID: String) -> String? {
         guard let index = config.profiles.firstIndex(where: { $0.id == profileID }),

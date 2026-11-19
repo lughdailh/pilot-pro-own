@@ -80,7 +80,7 @@ struct ControlCopyEditor: View {
             Picker("Pàgina de destinació", selection: $destinationPage) {
                 ForEach(destinations) { Text($0.name).tag($0.id) }
             }.disabled(destinations.isEmpty)
-            Text("Se substituiran les accions i els noms d’aquests controls a «\(destinationName)». Els controls sense acció també es copiaran com a buits. La resta de controls i els ajustos de resposta es conserven.")
+            Text("Se substituiran les accions, les combinacions i els noms d’aquests controls a «\(destinationName)». Els controls sense acció també es copiaran com a buits. El mode seqüencial d’una roda es comparteix entre els seus dos sentits i també es copia. La resta de controls i els ajustos de resposta es conserven.")
                 .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             HStack {
                 Button("Cancel·lar") { dismiss() }

@@ -17,6 +17,7 @@ struct MacroEditor: View {
                     Text(model.displayName(model.currentControl) + " · " + model.config.profiles[model.profileIndex].name + " · " + model.editingPage.name).font(.caption).foregroundStyle(.secondary)
                 }
             }
+            if !model.selectedModifiers.isEmpty { Text("Mantenint: " + model.modifierSelectionLabel).font(.caption.bold()).foregroundStyle(.cyan) }
             TextField("Nom de la macro", text: $title).textFieldStyle(.roundedBorder)
             Text("Combina canvis de pàgina, dreceres i pauses en l’ordre que necessitis.").font(.callout).foregroundStyle(.secondary)
             ScrollView {

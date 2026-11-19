@@ -12,6 +12,8 @@ Permet configurar les tres rodes, els vuit botons laterals, la creu inferior, el
 - Clic directe sobre «Sense drecera» o la drecera actual per gravar-la.
 - Botons que executen dreceres, canvien de pàgina o combinen canvis de pàgina, tecles i pauses dins d’una seqüència.
 - Etiquetes editables per a totes les accions; per defecte mostren la combinació gravada.
+- Combinacions amb botons mantinguts premuts: una altra acció per a la mateixa roda, botó o direcció del joystick. Admet un o diversos modificadors; si fas servir la combinació, no s’envia també l’acció individual del modificador.
+- Mode opcional «Roda seqüencial»: una llista compartida pels dos sentits, una drecera per pas, avançant o retrocedint segons el gir. Circular o amb aturada als extrems. Les accions separades es conserven en canviar de mode.
 - Accions positiva (+) i negativa (−) de cada roda, amb el sentit de gir configurable per roda i pàgina.
 - Exemple de macro: anar a Timeline → pausa de 50 ms → combinació de tecles.
 - Zona morta del joystick en percentatge, ajust fi de 0,5 punts i vista en directe; desada per pàgina.
@@ -33,6 +35,12 @@ La signatura és ad hoc per defecte. Si tens certificat propi, pots indicar-lo a
 Connecta el Pilot Pro per USB, identifica els controls, configura les dreceres i tanca el controlador oficial abans d’activar les dreceres pròpies. macOS pot requerir Accessibilitat i Monitoratge d’entrada.
 
 La pàgina es tria al selector, a la barra de menús o amb un botó o pas de seqüència. Per moure també el focus de Final Cut, afegeix la drecera corresponent. El canvi de pàgina indicat dins d’una seqüència permet continuar-ne els passos; un canvi manual la cancel·la. Per copiar Browser a Timeline: selecciona Timeline, obre «Gestionar pàgines → Copiar tota la configuració des de…» i tria Browser com a origen.
+
+Per crear una combinació: selecciona dos o més controls al mapa amb ⌘-clic → botó dret → «Crear combinació…». S’obre la pestanya «Combinacions» i l’editor per assignar-hi una drecera, un canvi de pàgina o una macro. La pestanya «Dreceres» edita l’acció normal. Si són dos botons, els pots prémer en qualsevol ordre. Si hi ha una roda o direcció del joystick, mantén els altres botons premuts mentre l’utilitzes. Les combinacions es desen per pàgina i també es copien amb el control. Si coincideix una combinació en girar una roda seqüencial, executa l’acció alternativa sense avançar-ne el recorregut.
+
+Els cercles de l’anella exterior corresponen a «Roda gran exterior»; els interiors, a «Roda del joystick».
+
+Per configurar una roda seqüencial: selecciona un cercle de la roda → «Mode de la roda» → «Roda seqüencial», afegeix les dreceres en ordre i desa. La primera rotació positiva comença pel primer pas; la negativa, per l’últim. Cada pas envia una sola drecera, sense reproduir tota la llista. La posició és independent per perfil, pàgina i roda, i es reinicia en activar/reconnectar, editar aquella pàgina o prémer «Reiniciar recorregut». El mode seqüencial fa servir tots els passos de la roda. En copiar un sentit d’una roda també es copia el seu mode seqüencial, compartit pels dos sentits.
 
 La configuració es desa a `~/Library/Application Support/Pilot Pro Own/configuration.json`. La versió anterior migra conservant les assignacions i fent-ne una còpia de seguretat. Aquest repositori no inclou configuracions personals ni registres de diagnòstic.
 
