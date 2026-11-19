@@ -7,6 +7,7 @@ struct ContentView: View {
     @State private var showMacro = false
     @State private var pageOperation: PageOperation?
     @State private var showPageCopy = false
+    @State private var showIdentification = false
     var body: some View {
         HStack(spacing: 0) {
             sidebar.frame(width: 235)
@@ -54,17 +55,7 @@ struct ContentView: View {
         .sheet(item: $pageOperation) { PageNameEditor(model: model, operation: $0) }
         .sheet(isPresented: $showPageCopy) { PageCopyEditor(model: model) }
         .sheet(isPresented: $showMacro) { MacroEditor(model: model) }
-        .sheet(isPresented: $showRecorder, onDismiss: { model.recordingShortcut = false }) {
-            VStack(spacing: 20) {
-                Image(systemName: "keyboard").font(.system(size: 38)).foregroundStyle(.cyan)
-                Text("Prem la drecera que vols assignar").font(.title2.bold())
-                Text("\(model.displayName(model.currentControl)) · \(model.config.profiles[model.profileIndex].name) · \(model.editingPage.name)").foregroundStyle(.secondary)
-                Text("Pots combinar ⌘, ⌥, ⌃ i ⇧ amb una tecla.").font(.callout)
-                ShortcutRecorder { shortcut in model.setShortcut(shortcut); showRecorder = false }
-                    .frame(width: 1, height: 1)
-                Button("Cancel·lar") { showRecorder = false }
-            }.padding(35).frame(width: 470)
-        }
+        .sheet(isPresented: $showRecorder) { ActionEditor(model: model) }
     }
     private var sidebar: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -72,7 +63,7 @@ struct ContentView: View {
                 Image(systemName: "dial.high.fill").font(.system(size: 30)).foregroundStyle(.cyan)
                 VStack(alignment: .leading) {
                     Text("PILOT OWN").font(.headline)
-                    Text("Controlador USB · 0.3.1").font(.caption).foregroundStyle(.secondary)
+                    Text("Controlador USB · 0.4.1").font(.caption).foregroundStyle(.secondary)
                 }
             }
             Divider()
@@ -150,11 +141,16 @@ struct ContentView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 HStack {
-                    Image(systemName: model.currentControl.symbol).font(.title2).foregroundStyle(.cyan)
+                    Image(systemName: model.selectedWheel != nil ? "dial.high" : model.currentControl.symbol).font(.title2).foregroundStyle(.cyan)
                     Text(model.currentControl.group).font(.caption).foregroundStyle(.secondary)
                 }
                 Text(model.displayName(model.currentControl)).font(.title2.bold())
-                TextField("Nom del control", text: Binding(get: { model.displayName(model.currentControl) }, set: { model.rename($0) }))
+                if let wheel = model.selectedWheel {
+                    Picker("Acció de la roda", selection: Binding(get: { model.selected }, set: { model.cancelLearning(); model.selected = $0 })) {
+                        Text("− Negatiu").tag(wheel + ".left")
+                        Text("+ Positiu").tag(wheel + ".right")
+                    }.pickerStyle(.segmented)
+                }
                 if model.learning != nil || model.wizard {
                     VStack(alignment: .leading, spacing: 12) {
                         Label(model.learning != nil ? "Identificant aquest control" : "Control identificat", systemImage: model.learning != nil ? "hand.point.up.left.fill" : "checkmark.circle.fill").foregroundStyle(.cyan)
@@ -164,66 +160,84 @@ struct ContentView: View {
                         Button("Acabar identificació") { model.cancelLearning() }.buttonStyle(.link)
                     }.padding(14).frame(maxWidth: .infinity, alignment: .leading).background(.cyan.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
                 }
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("1. Control físic").font(.headline)
-                    Label(model.config.bindings[model.selected] != nil ? "Identificat" : "Pendent d’identificar", systemImage: model.config.bindings[model.selected] != nil ? "checkmark.circle" : "circle.dashed")
-                        .font(.callout).foregroundStyle(model.config.bindings[model.selected] != nil ? .green : .secondary)
-                    Button("Identificar aquest control") { model.beginLearning(model.selected) }.disabled(!model.connected)
-                    if model.config.bindings[model.selected] != nil {
-                        Button("Oblidar identificació") { model.forgetSelected() }.font(.caption).buttonStyle(.link)
-                    }
-                }
-                Divider()
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("2. Drecera · \(model.editingPage.name)").font(.headline)
+                    Text("Acció · \(model.editingPage.name)").font(.headline)
                     Button {
-                        model.recordingShortcut = true; showRecorder = true
+                        if model.shortcut?.isSequence == true { showMacro = true }
+                        else { model.recordingShortcut = true; showRecorder = true }
                     } label: {
                         HStack {
-                            Text(model.shortcut?.label ?? "Sense drecera").font(.system(size: 26, weight: .medium, design: .rounded))
+                            Text(model.shortcut?.displayLabel ?? "Sense drecera").font(.system(size: 26, weight: .medium, design: .rounded))
                             Spacer(minLength: 8)
                             Image(systemName: "pencil").font(.callout).foregroundStyle(.cyan)
                         }.frame(maxWidth: .infinity).padding(16)
                             .background(.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 10))
                             .contentShape(Rectangle())
-                    }.buttonStyle(.plain).help("Clica per gravar la teva drecera")
-                    if model.shortcut != nil { Button("Esborrar drecera") { model.setShortcut(nil) }.buttonStyle(.link) }
+                    }.buttonStyle(.plain).help("Clica per assignar una drecera o una pàgina")
+                    if let shortcut = model.shortcut {
+                        Text("Etiqueta").font(.caption).foregroundStyle(.secondary)
+                        TextField("Etiqueta de l’acció", text: Binding(get: { model.shortcut?.displayLabel ?? "" }, set: { model.setActionLabel($0) }))
+                            .textFieldStyle(.roundedBorder).accessibilityLabel("Etiqueta de l’acció")
+                        if shortcut.customLabel != nil && shortcut.displayLabel != shortcut.label {
+                            Text(shortcut.label).font(.caption).foregroundStyle(.secondary)
+                            Button("Restablir etiqueta automàtica") { model.setActionLabel("") }.font(.caption).buttonStyle(.link)
+                        }
+                        Button("Esborrar acció") { model.setShortcut(nil) }.buttonStyle(.link)
+                    }
                     Button {
                         showMacro = true
-                    } label: { Label(model.shortcut?.sequence != nil ? "Editar seqüència…" : "Crear seqüència…", systemImage: "list.number") }
-                    if let steps = model.shortcut?.sequence {
+                    } label: { Label(model.shortcut?.isSequence == true ? "Editar seqüència…" : "Crear seqüència…", systemImage: "list.number") }
+                    if model.shortcut?.isSequence == true, let steps = model.shortcut?.sequence {
                         Text("Macro de \(steps.count) passos · pauses configurables").font(.caption).foregroundStyle(.cyan)
                     }
-                    Menu("Dreceres habituals de Final Cut Pro") {
-                        ForEach(Array(Self.suggestions.enumerated()), id: \.offset) { _, item in
-                            Button(item.0) { model.setShortcut(item.1) }
-                        }
-                    }
-                    Text("Un clic pot enviar una drecera o tota una seqüència. Les macros s’executen una darrere l’altra, sense barrejar els passos.")
-                        .font(.caption).foregroundStyle(.secondary)
+                }
+                if model.selectedWheel != nil || model.selectedJoystick {
+                    Divider()
+                    responseSettings
                 }
                 Divider()
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Resposta dels controls").font(.headline)
-                    HStack {
-                        Text("Zona morta del joystick").font(.caption)
-                        Spacer()
-                        TextField("Percentatge", value: Binding(get: { model.editingPage.deadZonePercent }, set: { let value = $0; model.updatePage { $0.deadZonePercent = value } }), format: .number.precision(.fractionLength(1)))
-                            .frame(width: 58).textFieldStyle(.roundedBorder)
-                            .accessibilityLabel("Zona morta en percentatge")
-                        Text("%").font(.caption).foregroundStyle(.secondary)
-                    }
-                    Slider(value: Binding(get: { min(90, model.editingPage.deadZonePercent) }, set: { let value = $0; model.updatePage { $0.deadZonePercent = value } }), in: 0...90, step: 0.5)
-                        .accessibilityLabel("Ajustar zona morta en percentatge")
-                    Text("Els moviments petits dins de la zona no activen cap direcció. Ajust fi de 0,5 punts; valor independent per pàgina.").font(.caption).foregroundStyle(.secondary)
-                    JoystickZonePreview(x: model.joystickX, y: model.joystickY, zone: model.editingPage.deadZone)
-                        .frame(height: 125)
-                    Text("Repetició: \(Int(model.editingPage.repeatInterval * 1000)) ms").font(.caption)
-                    Slider(value: Binding(get: { model.editingPage.repeatInterval }, set: { let value = $0; model.updatePage { $0.repeatInterval = value } }), in: 0.04...0.5, step: 0.02)
-                    Stepper("Rodes: 1 acció cada \(model.editingPage.wheelStep) passos", value: Binding(get: { model.editingPage.wheelStep }, set: { let value = $0; model.updatePage { $0.wheelStep = value } }), in: 1...8).font(.caption)
-                }
+                DisclosureGroup("Identificació del control", isExpanded: Binding(get: { showIdentification || model.learning != nil || model.wizard }, set: { showIdentification = $0 })) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Label(model.config.bindings[model.selected] != nil ? "Identificat" : "Pendent d’identificar", systemImage: model.config.bindings[model.selected] != nil ? "checkmark.circle" : "circle.dashed")
+                            .font(.callout).foregroundStyle(model.config.bindings[model.selected] != nil ? .green : .secondary)
+                        TextField("Nom del control", text: Binding(get: { model.displayName(model.currentControl) }, set: { model.rename($0) }))
+                        Button("Identificar aquest control") { model.beginLearning(model.selected) }.disabled(!model.connected)
+                        if model.config.bindings[model.selected] != nil { Button("Oblidar identificació") { model.forgetSelected() }.font(.caption).buttonStyle(.link) }
+                    }.padding(.top, 10)
+                }.font(.callout)
             }.padding(18)
         }.background(.white.opacity(0.035), in: RoundedRectangle(cornerRadius: 16))
+    }
+    private var responseSettings: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if let wheel = model.selectedWheel {
+                Text("Sentit i resposta de la roda").font(.headline)
+                Picker("El gir horari executa", selection: Binding(get: { model.editingPage.positiveClockwise(for: wheel) }, set: { let value = $0; model.updatePage { $0.setPositiveClockwise(value, for: wheel) } })) {
+                    Text("Positiu (+)").tag(true)
+                    Text("Negatiu (−)").tag(false)
+                }
+                Text("El sentit contrari executa l’altra acció. Defineix una drecera, pàgina o seqüència per a cada signe.").font(.caption).foregroundStyle(.secondary)
+                Stepper("Filtre de rodes: 1 acció / \(model.editingPage.wheelStep) passos", value: Binding(get: { model.editingPage.wheelStep }, set: { let value = $0; model.updatePage { $0.wheelStep = value } }), in: 1...8).font(.caption)
+            }
+            if model.selectedJoystick {
+                Text("Resposta del joystick").font(.headline)
+                HStack {
+                    Text("Zona morta del joystick").font(.caption)
+                    Spacer()
+                    TextField("Percentatge", value: Binding(get: { model.editingPage.deadZonePercent }, set: { let value = $0; model.updatePage { $0.deadZonePercent = value } }), format: .number.precision(.fractionLength(1)))
+                        .frame(width: 58).textFieldStyle(.roundedBorder)
+                        .accessibilityLabel("Zona morta en percentatge")
+                    Text("%").font(.caption).foregroundStyle(.secondary)
+            }
+                Slider(value: Binding(get: { min(90, model.editingPage.deadZonePercent) }, set: { let value = $0; model.updatePage { $0.deadZonePercent = value } }), in: 0...90, step: 0.5)
+                    .accessibilityLabel("Ajustar zona morta en percentatge")
+                Text("Els moviments petits dins de la zona no activen cap direcció. Ajust fi de 0,5 punts; valor independent per pàgina.").font(.caption).foregroundStyle(.secondary)
+                JoystickZonePreview(x: model.joystickX, y: model.joystickY, zone: model.editingPage.deadZone)
+                    .frame(height: 125)
+                Text("Repetició: \(Int(model.editingPage.repeatInterval * 1000)) ms").font(.caption)
+                Slider(value: Binding(get: { model.editingPage.repeatInterval }, set: { let value = $0; model.updatePage { $0.repeatInterval = value } }), in: 0.04...0.5, step: 0.02)
+            }
+        }
     }
     private var monitor: some View {
         HStack(alignment: .top, spacing: 22) {
@@ -285,23 +299,11 @@ struct PilotDiagram: View {
                 target("cross.right", label: "→", x: 510, y: 899, width: 54, height: 66, scale: scale)
             }.frame(width: w, height: h).position(x: geo.size.width / 2, y: geo.size.height / 2)
         }.padding(12)
-        .overlay(alignment: .bottom) {
-            if model.selected.hasPrefix("small.") || model.selected.hasPrefix("large.") || model.selected.hasPrefix("dial.") {
-                HStack {
-                    Button("↺ Antihorari") { selectWheel(left: true) }
-                    Button("Horari ↻") { selectWheel(left: false) }
-                }.padding(10)
-            }
-        }
-    }
-    private func selectWheel(left: Bool) {
-        let group = model.selected.split(separator: ".")[0]
-        model.selected = "\(group).\(left ? "left" : "right")"
     }
     private func target(_ id: String, label: String, x: Double, y: Double, width: Double, height: Double, scale: Double) -> some View {
         let mapped = model.config.bindings[id] != nil
         let active = model.config.bindings[id].map { model.heldTokens.contains($0) } ?? false
-        let name = PilotControl.all.first(where: { $0.id == id })?.name ?? id
+        let name = PilotControl.all.first(where: { $0.id == id }).map { model.displayName($0) } ?? id
         return ControlHitTarget(label: label, name: name, width: width * scale, height: height * scale,
                                 scale: scale, selected: model.selected == id, mapped: mapped, active: active) {
             model.cancelLearning(); model.selected = id

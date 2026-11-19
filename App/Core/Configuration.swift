@@ -5,6 +5,13 @@ struct Shortcut: Codable, Equatable {
     var modifiers: UInt64
     var label: String
     var sequence: [MacroStep]? = nil
+    var customLabel: String? = nil
+    var displayLabel: String { customLabel?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false ? customLabel! : label }
+    static func pageAction(_ reference: PageReference) -> Shortcut {
+        Shortcut(keyCode: 0, modifiers: 0, label: "Anar a \(reference.name)", sequence: [.page(reference)])
+    }
+    var isPageAction: Bool { if let sequence, sequence.count == 1, case .page = sequence[0] { return true }; return false }
+    var isSequence: Bool { sequence != nil && !isPageAction }
     var effectiveSteps: [MacroStep] { sequence ?? [.key(KeyStroke(keyCode: keyCode, modifiers: modifiers, label: label))] }
     var isValid: Bool { !effectiveSteps.isEmpty && effectiveSteps.count <= 100 && effectiveSteps.allSatisfy(\.isValid) }
 }
@@ -17,6 +24,18 @@ struct PilotPage: Codable, Identifiable, Equatable {
     var deadZone = 140
     var repeatInterval = 0.12
     var wheelStep = 1
+    var wheelPolarity: [String: Bool]? = nil
+    func positiveClockwise(for wheel: String) -> Bool { wheelPolarity?[wheel] ?? true }
+    mutating func setPositiveClockwise(_ value: Bool, for wheel: String) {
+        if wheelPolarity == nil { wheelPolarity = [:] }
+        wheelPolarity?[wheel] = value
+    }
+    func actionControl(for physicalControl: String) -> String {
+        let parts = physicalControl.split(separator: ".")
+        guard parts.count == 2, ["small", "large", "dial"].contains(String(parts[0])),
+              ["left", "right"].contains(String(parts[1])), !positiveClockwise(for: String(parts[0])) else { return physicalControl }
+        return String(parts[0]) + (parts[1] == "right" ? ".left" : ".right")
+    }
     var deadZonePercent: Double {
         get { Double(deadZone) / 511.0 * 100.0 }
         set {
@@ -28,11 +47,12 @@ struct PilotPage: Codable, Identifiable, Equatable {
     mutating func copySettings(from source: PilotPage) {
         // The destination keeps its identity and title. Copy every logical setting.
         shortcuts = source.shortcuts; names = source.names
-        deadZone = source.deadZone; repeatInterval = source.repeatInterval; wheelStep = source.wheelStep
+        deadZone = source.deadZone; repeatInterval = source.repeatInterval; wheelStep = source.wheelStep; wheelPolarity = source.wheelPolarity
     }
     var isValid: Bool {
         !id.isEmpty && !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
         (0...460).contains(deadZone) && (0.04...0.5).contains(repeatInterval) && (1...8).contains(wheelStep) &&
+        (wheelPolarity?.keys.allSatisfy { ["small", "large", "dial"].contains($0) } ?? true) &&
         shortcuts.keys.allSatisfy { id in PilotControl.all.contains(where: { $0.id == id }) } &&
         shortcuts.values.allSatisfy(\.isValid)
     }
@@ -121,5 +141,12 @@ struct PilotConfiguration: Codable {
               Set(bindings.values).count == bindings.count, profiles.allSatisfy(\.isValid)
         else { throw CocoaError(.coderReadCorrupt) }
         return self
+    }
+}
+
+extension PageReference {
+    // Cross-profile copies resolve corresponding pages by title if the source UUID is absent.
+    func resolve(in pages: [PilotPage]) -> PilotPage? {
+        pages.first(where: { $0.id == pageID }) ?? pages.first(where: { $0.name.caseInsensitiveCompare(name) == .orderedSame })
     }
 }

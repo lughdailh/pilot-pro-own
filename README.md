@@ -6,14 +6,14 @@ An open-source, native macOS USB controller for the **XPPen Pilot Pro** (`28bd:0
 
 ## Features
 
-- Three wheels with separate clockwise and counterclockwise assignments.
+- Three wheels with independent positive (+) and negative (−) actions. Choose which sign clockwise rotation executes, independently for each wheel and page.
 - Eight side buttons (four on each side), four lower directional buttons, the joystick button and the small-wheel button.
 - Four joystick directions with a **percentage dead zone**, 0.5 percentage-point slider increments, numeric entry and a live preview.
 - Named pages such as **Timeline** and **Browser**, with independent shortcuts, macros, control names and response settings.
 - Create, rename, duplicate and copy a complete page, including across profiles.
-- Built-in General and Final Cut Pro profiles; the foreground app selects the profile. Choose the page manually in the window or menu bar.
-- Click **Sense drecera** (No shortcut) or the current assignment to record a shortcut directly.
-- Macros with editable delays, ordering and steps, for example **⌘C → 50 ms → ⌘V**.
+- Built-in General and Final Cut Pro profiles; the foreground app selects the profile. Choose the page in the window or menu bar, or bind a controller button or sequence step to it.
+- Click **Sense drecera** (No shortcut) or the current action to assign a keystroke or a page change. Every action can have a custom label, defaulting to its recorded key combination.
+- Macros combining keyboard shortcuts, pauses and controller page changes, for example **go to Timeline → 50 ms → ⌘C**. A button can also change pages without sending a key.
 - Guided physical-control identification, identified/pending indicators, automatic saving and configuration export.
 
 The current interface is in Catalan. This is an independent project, not an official XPPen product.
@@ -37,14 +37,14 @@ To install your local build, quit any running copy and copy **`~/Library/Caches/
 
 1. Connect the Pilot Pro by USB and open the app. It starts in monitoring mode with shortcut output disabled.
 2. Select a control in the map, choose **Identificar aquest control**, then operate that physical control. Identifying one wheel direction also identifies its opposite.
-3. Choose a profile and page. Click **Sense drecera** or an existing shortcut to record a new one, or use **Crear seqüència** to build a macro.
+3. Choose a profile and page. Click **Sense drecera** or an existing action to choose **Drecera de teclat** or **Canviar de pàgina**, or use **Crear seqüència** to combine actions. Edit **Etiqueta** to give an action a descriptive name.
 4. Quit the official XPPen Pilot controller, grant Accessibility and any Input Monitoring access requested by macOS, then choose **Activar dreceres**.
 
-Page changes update the assignments used at runtime. They do not automatically detect which Final Cut panel is focused. To copy Browser into Timeline, select Timeline, open **Gestionar pàgines → Copiar tota la configuració des de…**, choose Browser as the source, and use the button that names both source and destination. This replaces the destination settings while keeping its title and physical-device calibration.
+Page changes update the assignments used at runtime. To also focus a Final Cut panel, include its keyboard shortcut in the sequence. Controller page selection does not automatically detect which Final Cut panel is focused. To copy Browser into Timeline, select Timeline, open **Gestionar pàgines → Copiar tota la configuració des de…**, choose Browser as the source, and use the button that names both source and destination. This replaces the destination settings while keeping its title and physical-device calibration.
 
-Each page has its own dead zone, repeat interval and wheel-step filter. The dead zone is measured independently on each axis; the preview shows the central area that ignores small movements. Existing configurations keep their previous threshold when displayed as a percentage.
+Each page has its own dead zone, repeat interval, wheel-step filter and independent wheel polarity settings. The dead zone is measured independently on each axis; the preview shows the central area that ignores small movements. Existing configurations keep their previous threshold when displayed as a percentage.
 
-Macros execute sequentially without interleaving their steps and cancel on a page/application change, disconnection, sleep or controller stop. A 50 ms delay is an initial value; some workflows need a longer pause.
+Macros execute sequentially without interleaving their steps. An explicit page-change step continues the same sequence on the destination page; a manual page change, application change, disconnection, sleep or controller stop cancels it. If a referenced page is unavailable, execution stops before later keys are emitted. Page references survive renaming; when copied to a different profile, a corresponding page can be resolved by its title. A 50 ms delay is an initial value; some workflows need a longer pause.
 
 ## Configuration
 

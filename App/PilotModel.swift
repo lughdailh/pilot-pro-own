@@ -133,7 +133,21 @@ final class PilotModel: ObservableObject {
         timer = Timer.scheduledTimer(withTimeInterval: 0.025, repeats: true) { [weak self] _ in self?.tick() }
     }
 
-    func displayName(_ control: PilotControl) -> String { editingPage.names[control.id] ?? control.name }
+    var selectedWheel: String? {
+        let parts = selected.split(separator: ".")
+        guard parts.count == 2, ["small", "large", "dial"].contains(String(parts[0])), ["left", "right"].contains(String(parts[1])) else { return nil }
+        return String(parts[0])
+    }
+    var selectedJoystick: Bool { selected.hasPrefix("stick.") || selected == "joystick.press" }
+    func displayName(_ control: PilotControl) -> String {
+        if let name = editingPage.names[control.id] { return name }
+        let parts = control.id.split(separator: ".")
+        if parts.count == 2, ["small", "large", "dial"].contains(String(parts[0])), ["left", "right"].contains(String(parts[1])) {
+            let wheel = parts[0] == "small" ? "Roda petita" : parts[0] == "large" ? "Roda gran" : "Tercera roda"
+            return wheel + (parts[1] == "right" ? " · positiu (+)" : " · negatiu (−)")
+        }
+        return control.name
+    }
     func rename(_ name: String) { updatePage { $0.names[selected] = name } }
     func log(_ message: String) {
         let line = Date().formatted(date: .omitted, time: .standard) + "  " + message
@@ -159,6 +173,9 @@ final class PilotModel: ObservableObject {
     }
     func clearInput() {
         sequences.cancel()
+        resetInputState()
+    }
+    private func resetInputState() {
         input.reset(); heldTokens = []; joystickX = 0; joystickY = 0
         stickLastReport = .distantPast; lastRepeat = .distantPast; wheelCounter = [:]
     }
@@ -249,6 +266,11 @@ final class PilotModel: ObservableObject {
         if let opposite = currentControl.opposite { config.bindings.removeValue(forKey: opposite) }
         save()
     }
+    func setActionLabel(_ label: String) {
+        guard var value = shortcut else { return }
+        value.customLabel = label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || label == value.label ? nil : label
+        setShortcut(value)
+    }
     func setShortcut(_ value: Shortcut?) {
         updatePage { $0.shortcuts[selected] = value }
     }
@@ -297,20 +319,43 @@ final class PilotModel: ObservableObject {
     }
     func trigger(_ token: String) {
         guard enabled, !recordingShortcut, learning == nil, !wizard, accessibility,
-              activeBundle != Bundle.main.bundleIdentifier,
-              let control = config.bindings.first(where: { $0.value == token })?.key,
-              let shortcut = activePage.shortcuts[control] else { return }
+              let physicalControl = config.bindings.first(where: { $0.value == token })?.key else { return }
+        let context = menuProfile
+        let control = context.activePage.actionControl(for: physicalControl)
+        guard let shortcut = context.activePage.shortcuts[control] else { return }
+        if activeBundle == Bundle.main.bundleIdentifier && shortcut.effectiveSteps.contains(where: { if case .key = $0 { return true }; return false }) { return }
         let targetBundle = activeBundle
-        let profileName = activeProfile.name + " · " + activePage.name
-        let targetPage = activePage.id
-        let controlName = activePage.names[control] ?? PilotControl.all.first(where: { $0.id == control })?.name ?? control
+        let profileID = context.id
+        let profileName = context.name
+        var expectedPage = context.activePage.id
+        let controlName = context.activePage.names[control] ?? PilotControl.all.first(where: { $0.id == control })?.name ?? control
         let accepted = sequences.enqueue(steps: shortcut.effectiveSteps, validate: { [weak self] in
             guard let self else { return false }
-            return self.enabled && self.accessibility && !self.recordingShortcut && self.learning == nil && !self.wizard && self.activeBundle == targetBundle && self.activePage.id == targetPage && self.activeBundle != Bundle.main.bundleIdentifier
-        }, emit: { [weak self] key in self?.emitKey(key) }, finished: { [weak self] in
-            self?.log("\(profileName): \(controlName) → \(shortcut.label)")
+            return self.enabled && self.accessibility && !self.recordingShortcut && self.learning == nil && !self.wizard && self.activeBundle == targetBundle && self.menuProfile.id == profileID && self.menuProfile.activePage.id == expectedPage
+        }, emit: { [weak self] key in
+            guard let self, self.activeBundle != Bundle.main.bundleIdentifier else { return }
+            self.emitKey(key)
+        }, changePage: { [weak self] reference in
+            guard let self, let pageID = self.performPageStep(reference, profileID: profileID) else { return false }
+            expectedPage = pageID
+            return true
+        }, finished: { [weak self] in
+            self?.log("\(profileName): \(controlName) → \(shortcut.displayLabel)")
         })
         if !accepted { log("Seqüència ignorada: cua plena") }
+    }
+    private func performPageStep(_ reference: PageReference, profileID: String) -> String? {
+        guard let index = config.profiles.firstIndex(where: { $0.id == profileID }),
+              let destination = reference.resolve(in: config.profiles[index].pages) else {
+            error = "No s’ha trobat la pàgina «\(reference.name)» en aquest perfil. Revisa la destinació de l’acció."
+            return nil
+        }
+        // Unlike a manual page change, this explicit macro step preserves the running sequence.
+        resetInputState()
+        config.profiles[index].activePageID = destination.id
+        save()
+        log("Pàgina activa: \(config.profiles[index].name) · \(destination.name)")
+        return destination.id
     }
     private func emitKey(_ key: KeyStroke) {
         guard let down = CGEvent(keyboardEventSource: source, virtualKey: key.keyCode, keyDown: true),

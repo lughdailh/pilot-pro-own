@@ -92,6 +92,35 @@ import Foundation
         pagesConfig.profiles[1].activePageID = destination.id
         pagesConfig.profiles[1].pages[1].name = " destination "
         check((try? pagesConfig.validated()) == nil, "Ambiguous duplicate page titles are rejected")
+        let timelineRef = PageReference(pageID: destination.id, name: destination.name)
+        let directPage = Shortcut.pageAction(timelineRef)
+        check(directPage.isValid && directPage.effectiveSteps == [.page(timelineRef)], "A button can contain only a page switch without emitting a key")
+        let mixed = Shortcut(keyCode: 0, modifiers: 0, label: "Timeline then paste", sequence: [.page(timelineRef), .pause(50), .key(paste)])
+        let restoredMixed = try JSONDecoder().decode(Shortcut.self, from: JSONEncoder().encode(mixed))
+        check(restoredMixed == mixed, "Page switch, pause and shortcut steps survive saving and reopening")
+        var renamedPage = destination
+        renamedPage.name = "Renamed destination"
+        check(timelineRef.resolve(in: [renamedPage])?.id == destination.id, "Renaming a target page does not break an action")
+        let copiedPage = PilotPage(name: destination.name)
+        check(timelineRef.resolve(in: [copiedPage])?.id == copiedPage.id, "Cross-profile copy resolves corresponding destination by page title")
+        check(timelineRef.resolve(in: []) == nil && !MacroStep.page(PageReference(pageID: "", name: "")).isValid, "Unavailable or malformed page destinations are handled explicitly")
+        var named = Shortcut(keyCode: copy.keyCode, modifiers: copy.modifiers, label: copy.label)
+        check(named.displayLabel == "⌘C", "A shortcut label defaults to the recorded combination")
+        named.customLabel = "Copiar"
+        let restoredLabel = try JSONDecoder().decode(Shortcut.self, from: JSONEncoder().encode(named))
+        check(restoredLabel.displayLabel == "Copiar" && restoredLabel.effectiveSteps == [.key(copy)], "Editing an action label preserves the underlying keystroke")
+        named.customLabel = "   "
+        check(named.displayLabel == "⌘C", "An empty custom label restores the automatic combination label")
+        var wheelPage = PilotPage(name: "Wheel directions")
+        check(wheelPage.actionControl(for: "small.right") == "small.right" && wheelPage.actionControl(for: "small.left") == "small.left", "Existing wheel assignments keep their default positive/negative direction")
+        wheelPage.setPositiveClockwise(false, for: "small")
+        check(wheelPage.actionControl(for: "small.right") == "small.left" && wheelPage.actionControl(for: "small.left") == "small.right", "Inverting a wheel swaps its positive and negative actions")
+        check(wheelPage.actionControl(for: "large.right") == "large.right" && wheelPage.actionControl(for: "side.left.1") == "side.left.1" && wheelPage.actionControl(for: "stick.left") == "stick.left", "Wheel polarity leaves other wheels, buttons and joystick directions unchanged")
+        let restoredWheel = try JSONDecoder().decode(PilotPage.self, from: JSONEncoder().encode(wheelPage))
+        check(!restoredWheel.positiveClockwise(for: "small"), "Per-wheel polarity survives saving and reopening")
+        var copiedWheel = PilotPage(name: "Wheel copy")
+        copiedWheel.copySettings(from: wheelPage)
+        check(copiedWheel.wheelPolarity == wheelPage.wheelPolarity && copiedWheel.name == "Wheel copy", "Complete page copying includes independent wheel polarity")
         let runner = SequenceRunner()
         var emissions: [(UInt16, Date)] = []
         var finished = 0
@@ -121,6 +150,23 @@ import Foundation
         samePage = false
         pump(until: { !runner.isBusy })
         check(emissions.map(\.0) == [8], "Switching page cancels pending macro keystrokes")
+        var navigationEvents: [String] = []
+        var currentPage = "browser"
+        var expectedPage = currentPage
+        var navigationFinished = false
+        runner.enqueue(steps: mixed.effectiveSteps, validate: { currentPage == expectedPage }, emit: { key in navigationEvents.append("key:\(key.label)") }, changePage: { reference in
+            currentPage = reference.pageID; expectedPage = reference.pageID
+            navigationEvents.append("page:\(reference.name)"); return true
+        }, finished: { navigationFinished = true })
+        pump(until: { navigationFinished })
+        check(navigationFinished && navigationEvents == ["page:Destination", "key:⌘V"] && currentPage == destination.id, "Explicit page step changes context and continues to the following shortcut")
+        navigationEvents = []
+        runner.enqueue(steps: directPage.effectiveSteps, validate: { true }, emit: { _ in navigationEvents.append("unexpected-key") }, changePage: { _ in navigationEvents.append("page"); return true })
+        check(navigationEvents == ["page"] && !runner.isBusy, "Page-only button finishes without synthesizing any keyboard event")
+        navigationEvents = []
+        runner.enqueue(steps: mixed.effectiveSteps, validate: { true }, emit: { _ in navigationEvents.append("unexpected-key") }, changePage: { _ in false })
+        pump(until: { !runner.isBusy })
+        check(navigationEvents.isEmpty && !runner.isBusy, "Failed page change stops before sending the remaining shortcut")
         // Replay actual hardware samples, independent of any connected device.
         for path in CommandLine.arguments.dropFirst() {
             var families = Set<UInt8>()

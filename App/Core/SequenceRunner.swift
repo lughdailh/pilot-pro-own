@@ -7,13 +7,21 @@ struct KeyStroke: Codable, Equatable {
     var isValid: Bool { keyCode <= 127 && modifiers & ~UInt64(0x1e0000) == 0 }
 }
 
+struct PageReference: Codable, Equatable {
+    var pageID: String
+    var name: String
+    var isValid: Bool { !pageID.isEmpty && !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+}
+
 enum MacroStep: Codable, Equatable {
     case key(KeyStroke)
     case pause(Int)
+    case page(PageReference)
     var isValid: Bool {
         switch self {
         case .key(let key): return key.isValid
         case .pause(let milliseconds): return (0...10_000).contains(milliseconds)
+        case .page(let reference): return reference.isValid
         }
     }
 }
@@ -24,6 +32,7 @@ final class SequenceRunner {
         var steps: [MacroStep]
         var validate: () -> Bool
         var emit: (KeyStroke) -> Void
+        var changePage: (PageReference) -> Bool
         var finished: () -> Void
     }
     private var jobs: [Job] = []
@@ -33,9 +42,9 @@ final class SequenceRunner {
     var onState: ((Bool) -> Void)?
 
     @discardableResult
-    func enqueue(steps: [MacroStep], validate: @escaping () -> Bool, emit: @escaping (KeyStroke) -> Void, finished: @escaping () -> Void = {}) -> Bool {
+    func enqueue(steps: [MacroStep], validate: @escaping () -> Bool, emit: @escaping (KeyStroke) -> Void, changePage: @escaping (PageReference) -> Bool = { _ in false }, finished: @escaping () -> Void = {}) -> Bool {
         guard !steps.isEmpty, steps.count <= 100, steps.allSatisfy(\.isValid), jobs.count < 32 else { return false }
-        jobs.append(Job(steps: steps, validate: validate, emit: emit, finished: finished))
+        jobs.append(Job(steps: steps, validate: validate, emit: emit, changePage: changePage, finished: finished))
         if !isBusy { startNext() }
         return true
     }
@@ -58,6 +67,8 @@ final class SequenceRunner {
             guard generation == ticket, job.validate() else { cancel(); return }
             switch job.steps[cursor] {
             case .key(let key): job.emit(key)
+            case .page(let reference):
+                guard job.changePage(reference) else { cancel(); return }
             case .pause(let milliseconds):
                 let nextIndex = cursor + 1
                 let item = DispatchWorkItem { [weak self] in self?.advance(job, index: nextIndex, generation: ticket) }
