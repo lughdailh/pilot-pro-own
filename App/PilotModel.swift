@@ -4,7 +4,11 @@ import ApplicationServices
 
 final class PilotModel: ObservableObject {
     @Published var config = PilotConfiguration()
-    @Published var selected = "side.left.1"
+    @Published var selected = "side.left.1" {
+        didSet { if !selectedControls.contains(selected) { selectedControls = [selected] } }
+    }
+    @Published var selectedControls: Set<String> = ["side.left.1"]
+    @Published var controlsToCopy: ControlCopyRequest?
     @Published var editingProfile = "finalcut"
     @Published var connected = false
     @Published var enabled = false
@@ -52,7 +56,7 @@ final class PilotModel: ObservableObject {
         guard !recordingShortcut else { return }
         let id = profileID ?? editingProfile
         guard let p = config.profiles.firstIndex(where: { $0.id == id }), config.profiles[p].pages.contains(where: { $0.id == pageID }) else { return }
-        clearInput(); cancelLearning()
+        clearInput(); cancelLearning(); selectedControls = [selected]
         config.profiles[p].activePageID = pageID; save()
         log("Pàgina activa: \(config.profiles[p].name) · \(config.profiles[p].activePage.name)")
     }
@@ -82,8 +86,34 @@ final class PilotModel: ObservableObject {
         updatePage { $0.copySettings(from: source) }
         log("Copiada tota la configuració de \(profile.name) · \(source.name) a \(title)")
     }
+    func selectControl(_ id: String, extending: Bool = false) {
+        cancelLearning()
+        if extending { toggleSelection(id) }
+        else { selected = id; selectedControls = [id] }
+    }
+    func toggleSelection(_ id: String) {
+        cancelLearning()
+        if selectedControls.contains(id) && selectedControls.count > 1 {
+            selectedControls.remove(id)
+            if selected == id { selected = selectedControls.sorted().first! }
+        } else {
+            selectedControls.insert(id); selected = id
+        }
+    }
+    func requestControlCopy(_ id: String) {
+        if !selectedControls.contains(id) { selectControl(id) }
+        controlsToCopy = ControlCopyRequest(controls: selectedControls, source: editingPage, profileName: config.profiles[profileIndex].name)
+    }
+    func copyControls(_ request: ControlCopyRequest, toProfile profileID: String, pageID: String) {
+        guard let p = config.profiles.firstIndex(where: { $0.id == profileID }),
+              let page = config.profiles[p].pages.firstIndex(where: { $0.id == pageID }), pageID != request.source.id else { return }
+        clearInput()
+        config.profiles[p].pages[page].copyControls(request.controls, from: request.source)
+        save()
+        log("Copiats \(request.controls.count) controls a \(config.profiles[p].name) · \(config.profiles[p].pages[page].name)")
+    }
     var accessibility: Bool { AXIsProcessTrusted() }
-    var mappedCount: Int { config.bindings.count }
+    var mappedCount: Int { config.resolvedBindings.count }
     var officialRunning: Bool {
         NSWorkspace.shared.runningApplications.contains { $0.bundleURL?.path == "/Applications/XPPenPilot/PilotController.app" }
     }
@@ -218,6 +248,7 @@ final class PilotModel: ObservableObject {
         activeName = app?.localizedName ?? "Cap aplicació"
     }
     func beginLearning(_ control: String, wizard: Bool = false) {
+        guard !PilotControl.diagonals.contains(where: { $0.id == control }) else { return }
         if enabled { disable() }
         self.wizard = wizard
         selected = control
@@ -236,7 +267,10 @@ final class PilotModel: ObservableObject {
     }
     var learningInstruction: String {
         guard let learning else { return "" }
-        if learning.hasPrefix("stick.") { return "Centra el joystick i mou-lo només cap a \(learning == "stick.up" ? "amunt" : "l’esquerra")." }
+        if learning.hasPrefix("stick.") {
+            let direction = ["stick.up": "amunt", "stick.down": "avall", "stick.left": "l’esquerra", "stick.right": "la dreta"][learning] ?? "la direcció indicada"
+            return "Centra el joystick i mou-lo només cap a \(direction)."
+        }
         let parts = learning.split(separator: ".")
         if parts.count == 2, ["small", "large", "dial"].contains(String(parts[0])), ["left", "right"].contains(String(parts[1])) {
             return "Gira només aquesta roda en sentit \(parts[1] == "right" ? "horari" : "antihorari"). També s’identificarà el sentit contrari."
@@ -301,10 +335,10 @@ final class PilotModel: ObservableObject {
         case .joystick(let x, let y):
             joystickX = x; joystickY = y
             stickLastReport = Date()
-            let tokens = PilotInputState.stickTokens(x: x, y: y, deadZone: activePage.deadZone)
+            let tokens = PilotInputState.stickTokens(x: x, y: y, deadZone: menuProfile.activePage.deadZone)
             heldTokens = heldTokens.filter { !$0.hasPrefix("stick.") }.union(tokens)
             if tokens.isEmpty { stickArmed = true }
-            if let learning, learning.hasPrefix("stick."), stickArmed, tokens.count == 1, let token = tokens.first {
+            if let learning, learning.hasPrefix("stick."), stickArmed, tokens.count == 1, let token = tokens.first, !token.contains("&") {
                 acceptLearning(token); stickArmed = false
             }
         }
@@ -316,13 +350,13 @@ final class PilotModel: ObservableObject {
         guard now.timeIntervalSince(stickLastReport) < 0.35 else {
             heldTokens = heldTokens.filter { !$0.hasPrefix("stick.") }; return
         }
-        guard now.timeIntervalSince(lastRepeat) >= activePage.repeatInterval else { return }
+        guard now.timeIntervalSince(lastRepeat) >= menuProfile.activePage.repeatInterval else { return }
         lastRepeat = now
         for token in heldTokens.sorted() where token.hasPrefix("stick.") { trigger(token) }
     }
     func trigger(_ token: String) {
         guard enabled, !recordingShortcut, learning == nil, !wizard, accessibility,
-              let physicalControl = config.bindings.first(where: { $0.value == token })?.key else { return }
+              let physicalControl = config.resolvedBindings.first(where: { $0.value == token })?.key else { return }
         let context = menuProfile
         let control = context.activePage.actionControl(for: physicalControl)
         guard let shortcut = context.activePage.shortcuts[control] else { return }
@@ -382,4 +416,11 @@ final class PilotModel: ObservableObject {
 
 extension JSONEncoder {
     static var pretty: JSONEncoder { let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]; return encoder }
+}
+
+struct ControlCopyRequest: Identifiable {
+    let id = UUID()
+    let controls: Set<String>
+    let source: PilotPage
+    let profileName: String
 }

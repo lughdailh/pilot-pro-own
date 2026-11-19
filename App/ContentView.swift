@@ -7,7 +7,7 @@ struct ContentView: View {
     @State private var showMacro = false
     @State private var pageOperation: PageOperation?
     @State private var showPageCopy = false
-    @State private var showIdentification = false
+    @Environment(\.openWindow) private var openWindow
     var body: some View {
         HStack(spacing: 0) {
             sidebar.frame(width: 235)
@@ -27,10 +27,13 @@ struct ContentView: View {
                     VStack(alignment: .leading, spacing: 10) {
                         HStack {
                             Text("Mapa del comandament").font(.headline)
+                            if model.selectedControls.count > 1 {
+                                Text("\(model.selectedControls.count) seleccionats").font(.caption).foregroundStyle(.cyan)
+                            }
                             Spacer()
                             Menu {
                                 ForEach(PilotControl.all) { control in
-                                    Button(model.displayName(control)) { model.cancelLearning(); model.selected = control.id }
+                                    Button(model.displayName(control)) { model.selectControl(control.id, extending: NSEvent.modifierFlags.contains(.command)) }
                                 }
                             } label: { Label("Controls", systemImage: "list.bullet") }
                         }
@@ -41,7 +44,7 @@ struct ContentView: View {
                             Label("Identificat", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
                             Label("Pendent", systemImage: "circle.dashed").foregroundStyle(.orange)
                         }.font(.caption)
-                        Text("4 + 4 laterals · creu inferior · 3 rodes · joystick\nEsquema amb els laterals desplegats; clica un control per configurar-lo.")
+                        Text("4 + 4 laterals · creu inferior · 3 rodes · joystick de 8 direccions\nEsquema amb els laterals desplegats; ⌘-clic per seleccionar-ne diversos; botó dret per copiar-los.")
                             .font(.caption).foregroundStyle(.secondary)
                     }.frame(maxWidth: .infinity, maxHeight: .infinity)
                     inspector.frame(width: 340)
@@ -51,57 +54,70 @@ struct ContentView: View {
         }
         .background(Color(nsColor: .windowBackgroundColor))
         .preferredColorScheme(.dark)
-        .onChange(of: model.editingProfile) { _, _ in model.clearInput(); model.cancelLearning() }
+        .onChange(of: model.editingProfile) { _, _ in model.clearInput(); model.cancelLearning(); model.selectedControls = [model.selected] }
         .sheet(item: $pageOperation) { PageNameEditor(model: model, operation: $0) }
         .sheet(isPresented: $showPageCopy) { PageCopyEditor(model: model) }
         .sheet(isPresented: $showMacro) { MacroEditor(model: model) }
+        .sheet(item: $model.controlsToCopy) { ControlCopyEditor(model: model, request: $0) }
         .sheet(isPresented: $showRecorder) { ActionEditor(model: model) }
     }
     private var sidebar: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: 16) {
             HStack(spacing: 10) {
                 Image(systemName: "dial.high.fill").font(.system(size: 30)).foregroundStyle(.cyan)
                 VStack(alignment: .leading) {
                     Text("PILOT OWN").font(.headline)
-                    Text("Controlador USB · 0.4.2").font(.caption).foregroundStyle(.secondary)
+                    Text("Controlador USB · 0.4.3").font(.caption).foregroundStyle(.secondary)
                 }
             }
             Divider()
-            Label(model.connected ? "Pilot Pro connectat" : "Sense connexió", systemImage: model.connected ? "cable.connector" : "cable.connector.slash")
-                .font(.callout).foregroundStyle(model.connected ? .green : .secondary)
-            VStack(alignment: .leading, spacing: 8) {
-                Text("PERFIL QUE EDITES").font(.caption2.bold()).foregroundStyle(.secondary)
-                Picker("Perfil", selection: $model.editingProfile) {
-                    ForEach(model.config.profiles) { Text($0.name).tag($0.id) }
-                }.labelsHidden()
-                Text("El perfil s’activa quan l’aplicació és al davant. General s’aplica a la resta.")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-            VStack(alignment: .leading, spacing: 6) {
-                Text("APLICACIÓ AL DAVANT").font(.caption2.bold()).foregroundStyle(.secondary)
-                Text(model.activeName).font(.callout.bold())
-                Text("\(model.activeProfile.name) · \(model.activePage.name)").font(.caption).foregroundStyle(.secondary)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    Label(model.connected ? "Pilot Pro connectat" : "Sense connexió", systemImage: model.connected ? "cable.connector" : "cable.connector.slash")
+                        .font(.callout).foregroundStyle(model.connected ? .green : .secondary)
+                    Text(model.status).font(.caption).foregroundStyle(.secondary)
+                    Text("PERFIL QUE EDITES").font(.caption2.bold()).foregroundStyle(.secondary)
+                    Picker("Perfil", selection: $model.editingProfile) {
+                        ForEach(model.config.profiles) { Text($0.name).tag($0.id) }
+                    }.labelsHidden()
+                    Text("Perfil en ús: \(model.menuProfile.name) · \(model.menuProfile.activePage.name)").font(.caption.bold())
+                    Text("Final Cut Pro s’aplica quan treballes a Final Cut; General, a la resta d’apps.").font(.caption).foregroundStyle(.secondary)
+                    Divider()
+                    Text("Identificació física").font(.headline)
+                    ProgressView(value: Double(model.mappedCount), total: Double(PilotControl.all.count)).tint(.cyan)
+                    Text("\(model.mappedCount) de \(PilotControl.all.count) senyals identificats").font(.caption).foregroundStyle(.secondary)
+                    Button("Identificar tots els controls") { model.beginLearning(PilotControl.calibration[0].id, wizard: true) }
+                        .disabled(!model.connected)
+                    Divider()
+                    Text("Control seleccionat").font(.headline)
+                    Label(model.displayName(model.currentControl), systemImage: model.currentControl.symbol).font(.callout.bold())
+                        .fixedSize(horizontal: false, vertical: true)
+                    Label(model.config.resolvedBindings[model.selected] != nil ? "Identificat" : "Pendent d’identificar", systemImage: model.config.resolvedBindings[model.selected] != nil ? "checkmark.circle" : "circle.dashed")
+                        .font(.caption).foregroundStyle(model.config.resolvedBindings[model.selected] != nil ? .green : .secondary)
+                    TextField("Nom del control", text: Binding(get: { model.displayName(model.currentControl) }, set: { model.rename($0) }))
+                        .textFieldStyle(.roundedBorder)
+                    if model.currentControl.isDiagonal {
+                        Text("Identificació automàtica a partir de les direccions rectes del joystick.").font(.caption).foregroundStyle(.secondary)
+                    } else {
+                        Button("Identificar aquest control") { model.beginLearning(model.selected) }.disabled(!model.connected)
+                        if model.config.resolvedBindings[model.selected] != nil { Button("Oblidar identificació") { model.forgetSelected() }.font(.caption).buttonStyle(.link) }
+                    }
+                    if model.learning != nil || model.wizard {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text(model.learning != nil ? "Identificant aquest control" : "Control identificat").font(.callout.bold()).foregroundStyle(.cyan)
+                            if model.learning != nil { Text(model.learningInstruction).font(.caption) }
+                            if let notice = model.learnedNotice { Text(notice).font(.caption.bold()) }
+                            if model.learning == nil && model.wizard { Button("Següent control →") { model.nextLearning() }.buttonStyle(.borderedProminent) }
+                            Button("Acabar identificació") { model.cancelLearning() }.font(.caption).buttonStyle(.link)
+                        }.padding(10).background(.cyan.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
+                    }
+                }.frame(maxWidth: .infinity, alignment: .leading)
             }
             Divider()
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Identificació física").font(.headline)
-                ProgressView(value: Double(model.mappedCount), total: Double(PilotControl.all.count)).tint(.cyan)
-                Text("\(model.mappedCount) de \(PilotControl.all.count) senyals identificats").font(.caption).foregroundStyle(.secondary)
-                Button("Identificar tots els controls") { model.beginLearning(PilotControl.calibration[0].id, wizard: true) }
-                    .disabled(!model.connected)
-            }
-            Divider()
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Permisos i connexió").font(.headline)
-                Button("Accessibilitat…") { model.requestAccessibility() }
-                Button("Monitoratge d’entrada…") { model.openPrivacy("Privacy_ListenEvent") }
-                Button("Tancar XPPen") { model.closeOfficial() }
-                Button("Tornar a connectar") { model.disable() }
-            }.buttonStyle(.link)
-            Spacer(minLength: 10)
-            Button("Exportar configuració…") { model.exportConfiguration() }.buttonStyle(.link)
-            Button("Mostrar fitxer de configuració") { model.revealConfiguration() }.buttonStyle(.link)
-            Text("Les dreceres comencen aturades. Els controls sense assignació no executen accions.").font(.caption2).foregroundStyle(.secondary)
+            Button { openWindow(id: "administration") } label: {
+                Label("Configuració", systemImage: "gearshape").frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 5)
+            }.buttonStyle(.bordered)
+            Text("Els controls sense assignació no executen accions.").font(.caption2).foregroundStyle(.secondary)
         }.padding(20).background(.black.opacity(0.2))
     }
     private var pageBar: some View {
@@ -126,7 +142,7 @@ struct ContentView: View {
         HStack {
             VStack(alignment: .leading, spacing: 5) {
                 Text("El teu Pilot Pro, al teu gust").font(.system(size: 25, weight: .semibold))
-                Text(model.status).font(.callout).foregroundStyle(.secondary)
+                Text("\(model.config.profiles[model.profileIndex].name) · \(model.editingPage.name)").font(.callout).foregroundStyle(.secondary)
             }
             Spacer()
             Button {
@@ -150,15 +166,6 @@ struct ContentView: View {
                         Text("↺ Antihorari").tag(model.editingPage.actionControl(for: wheel + ".left"))
                         Text("↻ Horari").tag(model.editingPage.actionControl(for: wheel + ".right"))
                     }.pickerStyle(.segmented)
-                }
-                if model.learning != nil || model.wizard {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Label(model.learning != nil ? "Identificant aquest control" : "Control identificat", systemImage: model.learning != nil ? "hand.point.up.left.fill" : "checkmark.circle.fill").foregroundStyle(.cyan)
-                        if model.learning != nil { Text(model.learningInstruction).font(.callout) }
-                        if let notice = model.learnedNotice { Text(notice).font(.callout.bold()) }
-                        if model.learning == nil && model.wizard { Button("Següent control →") { model.nextLearning() }.buttonStyle(.borderedProminent) }
-                        Button("Acabar identificació") { model.cancelLearning() }.buttonStyle(.link)
-                    }.padding(14).frame(maxWidth: .infinity, alignment: .leading).background(.cyan.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
                 }
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Acció · \(model.editingPage.name)").font(.headline)
@@ -195,16 +202,6 @@ struct ContentView: View {
                     Divider()
                     responseSettings
                 }
-                Divider()
-                DisclosureGroup("Identificació del control", isExpanded: Binding(get: { showIdentification || model.learning != nil || model.wizard }, set: { showIdentification = $0 })) {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Label(model.config.bindings[model.selected] != nil ? "Identificat" : "Pendent d’identificar", systemImage: model.config.bindings[model.selected] != nil ? "checkmark.circle" : "circle.dashed")
-                            .font(.callout).foregroundStyle(model.config.bindings[model.selected] != nil ? .green : .secondary)
-                        TextField("Nom del control", text: Binding(get: { model.displayName(model.currentControl) }, set: { model.rename($0) }))
-                        Button("Identificar aquest control") { model.beginLearning(model.selected) }.disabled(!model.connected)
-                        if model.config.bindings[model.selected] != nil { Button("Oblidar identificació") { model.forgetSelected() }.font(.caption).buttonStyle(.link) }
-                    }.padding(.top, 10)
-                }.font(.callout)
             }.padding(18)
         }.background(.white.opacity(0.035), in: RoundedRectangle(cornerRadius: 16))
     }
@@ -234,6 +231,7 @@ struct ContentView: View {
                 Text("Els moviments petits dins de la zona no activen cap direcció. Ajust fi de 0,5 punts; valor independent per pàgina.").font(.caption).foregroundStyle(.secondary)
                 JoystickZonePreview(x: model.joystickX, y: model.joystickY, zone: model.editingPage.deadZone)
                     .frame(height: 125)
+                Text("Les diagonals tenen una acció pròpia. Si les deixes sense drecera, no executen les dues direccions rectes.").font(.caption).foregroundStyle(.secondary)
                 Text("Repetició: \(Int(model.editingPage.repeatInterval * 1000)) ms").font(.caption)
                 Slider(value: Binding(get: { model.editingPage.repeatInterval }, set: { let value = $0; model.updatePage { $0.repeatInterval = value } }), in: 0.04...0.5, step: 0.02)
             }
@@ -287,8 +285,8 @@ struct PilotDiagram: View {
                 target("small.press", label: "●", x: 450, y: 207, width: 65, height: 65, scale: scale)
                 wheelTarget("small", clockwise: false, x: 350, y: 207, scale: scale)
                 wheelTarget("small", clockwise: true, x: 550, y: 207, scale: scale)
-                wheelTarget("large", clockwise: false, x: 340, y: 390, scale: scale)
-                wheelTarget("large", clockwise: true, x: 560, y: 390, scale: scale)
+                wheelTarget("large", clockwise: false, x: 330, y: 365, scale: scale)
+                wheelTarget("large", clockwise: true, x: 570, y: 365, scale: scale)
                 wheelTarget("dial", clockwise: false, x: 210, y: 510, scale: scale)
                 wheelTarget("dial", clockwise: true, x: 690, y: 510, scale: scale)
                 target("joystick.press", label: "●", x: 450, y: 510, width: 100, height: 100, scale: scale)
@@ -296,6 +294,10 @@ struct PilotDiagram: View {
                 target("stick.down", label: "↓", x: 450, y: 607, width: 50, height: 50, scale: scale)
                 target("stick.left", label: "←", x: 351, y: 510, width: 50, height: 50, scale: scale)
                 target("stick.right", label: "→", x: 549, y: 510, width: 50, height: 50, scale: scale)
+                target("stick.up-left", label: "↖", x: 373, y: 433, width: 50, height: 50, scale: scale)
+                target("stick.up-right", label: "↗", x: 527, y: 433, width: 50, height: 50, scale: scale)
+                target("stick.down-left", label: "↙", x: 373, y: 587, width: 50, height: 50, scale: scale)
+                target("stick.down-right", label: "↘", x: 527, y: 587, width: 50, height: 50, scale: scale)
                 target("cross.up", label: "↑", x: 450, y: 845, width: 66, height: 54, scale: scale)
                 target("cross.down", label: "↓", x: 450, y: 957, width: 66, height: 54, scale: scale)
                 target("cross.left", label: "←", x: 390, y: 899, width: 54, height: 66, scale: scale)
@@ -309,18 +311,27 @@ struct PilotDiagram: View {
         let wheelName = wheel == "small" ? "Roda petita" : wheel == "large" ? "Roda gran" : "Tercera roda"
         let title = wheelName + (clockwise ? " · gir horari" : " · gir antihorari")
         return WheelDirectionTarget(clockwise: clockwise, title: title, diameter: 72 * scale,
-                                    selected: model.selected == logical, mapped: model.config.bindings[physical] != nil) {
-            model.cancelLearning(); model.selected = logical
-        }.position(x: x * scale, y: y * scale)
+                                    selected: model.selectedControls.contains(logical), mapped: model.config.bindings[physical] != nil) {
+            model.selectControl(logical)
+        }.highPriorityGesture(TapGesture().modifiers(.command).onEnded { model.selectControl(logical, extending: true) })
+            .contextMenu { controlMenu(logical) }.position(x: x * scale, y: y * scale)
     }
     private func target(_ id: String, label: String, x: Double, y: Double, width: Double, height: Double, scale: Double) -> some View {
-        let mapped = model.config.bindings[id] != nil
-        let active = model.config.bindings[id].map { model.heldTokens.contains($0) } ?? false
+        let mapped = model.config.resolvedBindings[id] != nil
+        let active = model.config.resolvedBindings[id].map { model.heldTokens.contains($0) } ?? false
         let name = PilotControl.all.first(where: { $0.id == id }).map { model.displayName($0) } ?? id
         return ControlHitTarget(label: label, name: name, width: width * scale, height: height * scale,
-                                scale: scale, selected: model.selected == id, mapped: mapped, active: active) {
-            model.cancelLearning(); model.selected = id
-        }.position(x: x * scale, y: y * scale)
+                                scale: scale, selected: model.selectedControls.contains(id), mapped: mapped, active: active) {
+            model.selectControl(id)
+        }.highPriorityGesture(TapGesture().modifiers(.command).onEnded { model.selectControl(id, extending: true) })
+            .contextMenu { controlMenu(id) }.position(x: x * scale, y: y * scale)
+    }
+    @ViewBuilder private func controlMenu(_ id: String) -> some View {
+        let count = model.selectedControls.contains(id) ? model.selectedControls.count : 1
+        Button(model.selectedControls.contains(id) && model.selectedControls.count > 1 ? "Treure de la selecció" : "Afegir a la selecció") { model.toggleSelection(id) }
+        Button("Seleccionar només aquest control") { model.selectControl(id) }
+        Divider()
+        Button(count == 1 ? "Copiar aquest control a…" : "Copiar els \(count) controls a…") { model.requestControlCopy(id) }
     }
 }
 

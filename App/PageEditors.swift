@@ -58,3 +58,39 @@ struct PageCopyEditor: View {
             .onChange(of: sourceProfile) { _, _ in sourcePage = sources.first?.id ?? "" }
     }
 }
+
+
+struct ControlCopyEditor: View {
+    @ObservedObject var model: PilotModel
+    let request: ControlCopyRequest
+    @Environment(\.dismiss) private var dismiss
+    @State private var destinationProfile = ""
+    @State private var destinationPage = ""
+    var destinations: [PilotPage] { model.config.profiles.first(where: { $0.id == destinationProfile })?.pages.filter { $0.id != request.source.id } ?? [] }
+    var destinationName: String { destinations.first(where: { $0.id == destinationPage })?.name ?? "…" }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            Text("Copiar \(request.controls.count) controls").font(.title2.bold())
+            Text("Origen: \(request.profileName) · \(request.source.name)").font(.headline)
+            Text(PilotControl.all.filter { request.controls.contains($0.id) }.map { request.source.names[$0.id] ?? $0.name }.joined(separator: " · "))
+                .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            Picker("Perfil de destinació", selection: $destinationProfile) {
+                ForEach(model.config.profiles) { Text($0.name).tag($0.id) }
+            }
+            Picker("Pàgina de destinació", selection: $destinationPage) {
+                ForEach(destinations) { Text($0.name).tag($0.id) }
+            }.disabled(destinations.isEmpty)
+            Text("Se substituiran les accions i els noms d’aquests controls a «\(destinationName)». Els controls sense acció també es copiaran com a buits. La resta de controls i els ajustos de resposta es conserven.")
+                .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            HStack {
+                Button("Cancel·lar") { dismiss() }
+                Spacer()
+                Button("Copiar a «\(destinationName)»") {
+                    model.copyControls(request, toProfile: destinationProfile, pageID: destinationPage); dismiss()
+                }.buttonStyle(.borderedProminent).disabled(!destinations.contains(where: { $0.id == destinationPage }))
+            }
+        }.padding(25).frame(width: 560)
+            .onAppear { destinationProfile = model.editingProfile; destinationPage = destinations.first?.id ?? "" }
+            .onChange(of: destinationProfile) { _, _ in destinationPage = destinations.first?.id ?? "" }
+    }
+}

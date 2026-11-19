@@ -8,9 +8,10 @@ An open-source, native macOS USB controller for the **XPPen Pilot Pro** (`28bd:0
 
 - Three wheels with paired clockwise/anticlockwise controls on the map: white outlined circles with opaque black interiors and direction arrows. Independent positive (+) and negative (−) actions. Choose which sign clockwise rotation executes, independently for each wheel and page.
 - Eight side buttons (four on each side), four lower directional buttons, the joystick button and the small-wheel button.
-- Four joystick directions with a **percentage dead zone**, 0.5 percentage-point slider increments, numeric entry and a live preview.
+- Eight exclusive joystick directions, including four independent diagonals that default to no action, with a **percentage dead zone**, 0.5 percentage-point slider increments, numeric entry and a live preview.
 - Named pages such as **Timeline** and **Browser**, with independent shortcuts, macros, control names and response settings.
-- Create, rename, duplicate and copy a complete page, including across profiles.
+- Create, rename, duplicate and copy a complete page, including across profiles. Select individual controls with ⌘-click or the right-click menu, then right-click to copy their actions and labels to another page/profile.
+- The left sidebar collects connection status, active profile and physical identification. The right inspector stays focused on the selected action. A separate floating Configuration window contains permissions, connection administration and configuration export.
 - Built-in General and Final Cut Pro profiles; the foreground app selects the profile. Choose the page in the window or menu bar, or bind a controller button or sequence step to it.
 - Click **Sense drecera** (No shortcut) or the current action to assign a keystroke or a page change. Every action can have a custom label, defaulting to its recorded key combination.
 - Macros combining keyboard shortcuts, pauses and controller page changes, for example **go to Timeline → 50 ms → ⌘C**. A button can also change pages without sending a key.
@@ -42,6 +43,8 @@ To install your local build, quit any running copy and copy **`~/Library/Caches/
 
 Page changes update the assignments used at runtime. To also focus a Final Cut panel, include its keyboard shortcut in the sequence. Controller page selection does not automatically detect which Final Cut panel is focused. To copy Browser into Timeline, select Timeline, open **Gestionar pàgines → Copiar tota la configuració des de…**, choose Browser as the source, and use the button that names both source and destination. This replaces the destination settings while keeping its title and physical-device calibration.
 
+A diagonal emits only its own action, never both cardinal actions. Its physical identification is derived from the calibrated cardinal axes, and new diagonals start unassigned.
+
 Each page has its own dead zone, repeat interval, wheel-step filter and independent wheel polarity settings. The dead zone is measured independently on each axis; the preview shows the central area that ignores small movements. Existing configurations keep their previous threshold when displayed as a percentage.
 
 Macros execute sequentially without interleaving their steps. An explicit page-change step continues the same sequence on the destination page; a manual page change, application change, disconnection, sleep or controller stop cancels it. If a referenced page is unavailable, execution stops before later keys are emitted. Page references survive renaming; when copied to a different profile, a corresponding page can be resolved by its title. A 50 ms delay is an initial value; some workflows need a longer pause.
@@ -66,7 +69,7 @@ Core tests run without a connected controller. They cover input parsing and butt
 
 ## Validation and current limits
 
-The controller was physically identified and tested on an Apple Silicon Mac over USB. All 24 assignable signals were identified in the app, and native UI checks covered page switching/copying, titles, shortcut recording and the macro editor. Emission of assigned shortcuts to Final Cut Pro was observed, but complete editor workflows and external-app macros have not all been independently verified.
+The controller was physically identified and tested on an Apple Silicon Mac over USB. The original 24 signals were identified in the app; the four added diagonal signals are derived from those calibrated axes, and native UI checks covered page switching/copying, titles, shortcut recording and the macro editor. Emission of assigned shortcuts to Final Cut Pro was observed, but complete editor workflows and external-app macros have not all been independently verified.
 
 Intel hardware, Bluetooth, haptics and long-running sleep/reconnect sessions are not validated. The official software sends per-wheel speed settings to the hardware; this app currently uses a software step filter and does not reproduce that hardware-speed setup. It sends no firmware-update or device-configuration reports.
 

@@ -49,6 +49,12 @@ struct PilotPage: Codable, Identifiable, Equatable {
         shortcuts = source.shortcuts; names = source.names
         deadZone = source.deadZone; repeatInterval = source.repeatInterval; wheelStep = source.wheelStep; wheelPolarity = source.wheelPolarity
     }
+    mutating func copyControls(_ controls: Set<String>, from source: PilotPage) {
+        for id in controls where PilotControl.all.contains(where: { $0.id == id }) {
+            shortcuts[id] = source.shortcuts[id]
+            names[id] = source.names[id]
+        }
+    }
     var isValid: Bool {
         !id.isEmpty && !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
         (0...460).contains(deadZone) && (0.04...0.5).contains(repeatInterval) && (1...8).contains(wheelStep) &&
@@ -130,6 +136,19 @@ struct PilotConfiguration: Codable {
     func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(version, forKey: .version); try c.encode(bindings, forKey: .bindings); try c.encode(profiles, forKey: .profiles)
+    }
+    // Diagonal identification follows the calibrated axes, including swapped/inverted axes.
+    // No persisted mapping or user page setting needs migration.
+    var resolvedBindings: [String: String] {
+        var result = bindings
+        for diagonal in PilotControl.diagonals {
+            result.removeValue(forKey: diagonal.id)
+            if let vertical = bindings[diagonal.vertical], let horizontal = bindings[diagonal.horizontal],
+               let token = PilotInputState.diagonalToken(vertical, horizontal) {
+                result[diagonal.id] = token
+            }
+        }
+        return result
     }
     func profile(for bundleID: String?) -> PilotProfile {
         profiles.first(where: { $0.bundleID != nil && $0.bundleID == bundleID }) ?? profiles.first(where: { $0.id == "general" }) ?? profiles[0]

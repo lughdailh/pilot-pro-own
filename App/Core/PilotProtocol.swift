@@ -36,6 +36,14 @@ struct PilotControl: Identifiable {
     let group: String
     var opposite: String? = nil
 
+    static let diagonals: [(id: String, vertical: String, horizontal: String, name: String, symbol: String)] = [
+        ("stick.up-left", "stick.up", "stick.left", "amunt i esquerra", "arrow.up.left"),
+        ("stick.up-right", "stick.up", "stick.right", "amunt i dreta", "arrow.up.right"),
+        ("stick.down-left", "stick.down", "stick.left", "avall i esquerra", "arrow.down.left"),
+        ("stick.down-right", "stick.down", "stick.right", "avall i dreta", "arrow.down.right")
+    ]
+    var isDiagonal: Bool { Self.diagonals.contains { $0.id == id } }
+
     static let all: [PilotControl] = {
         var result: [PilotControl] = []
         for side in ["left", "right"] {
@@ -57,9 +65,12 @@ struct PilotControl: Identifiable {
         for (id, name, opposite) in [("up", "Amunt", "down"), ("down", "Avall", "up"), ("left", "Esquerra", "right"), ("right", "Dreta", "left")] {
             result.append(PilotControl(id: "stick.\(id)", name: "Joystick · \(name.lowercased())", symbol: "arrow.\(id)", group: "Joystick", opposite: "stick.\(opposite)"))
         }
+        for diagonal in diagonals {
+            result.append(PilotControl(id: diagonal.id, name: "Joystick · " + diagonal.name, symbol: diagonal.symbol, group: "Joystick"))
+        }
         return result
     }()
-    static let calibration = all.filter { !(["small.left", "large.left", "dial.left", "stick.down", "stick.right"].contains($0.id)) }
+    static let calibration = all.filter { !$0.isDiagonal && !(["small.left", "large.left", "dial.left", "stick.down", "stick.right"].contains($0.id)) }
     // All buttons, clockwise for each wheel, then up and left for the joystick.
 }
 
@@ -78,11 +89,25 @@ struct PilotInputState {
         return current.subtracting(buttons).sorted()
     }
 
-    static func stickTokens(x: Int, y: Int, deadZone: Int) -> Set<String> {
+    static func stickAxisTokens(x: Int, y: Int, deadZone: Int) -> Set<String> {
         var result = Set<String>()
         if abs(x) > deadZone { result.insert(x > 0 ? "stick.x+" : "stick.x-") }
         if abs(y) > deadZone { result.insert(y > 0 ? "stick.y+" : "stick.y-") }
         return result
+    }
+
+    // A diagonal is one exclusive signal, so unassigned diagonals stay silent.
+    static func stickTokens(x: Int, y: Int, deadZone: Int) -> Set<String> {
+        let axes = stickAxisTokens(x: x, y: y, deadZone: deadZone)
+        guard !axes.isEmpty else { return [] }
+        return [axes.sorted().joined(separator: "&")]
+    }
+
+    static func diagonalToken(_ first: String, _ second: String) -> String? {
+        let x = Set(["stick.x+", "stick.x-"])
+        let y = Set(["stick.y+", "stick.y-"])
+        guard (x.contains(first) && y.contains(second)) || (y.contains(first) && x.contains(second)) else { return nil }
+        return [first, second].sorted().joined(separator: "&")
     }
 
     static func opposite(_ token: String) -> String? {

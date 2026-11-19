@@ -20,6 +20,11 @@ struct PilotProOwnApp: App {
                 Button("Identificar tots els controls") { model.beginLearning(PilotControl.calibration[0].id, wizard: true) }
             }
         }
+        Window("Configuració · Pilot Pro Own", id: "administration") {
+            AdministrationView(model: model)
+        }
+        .windowResizability(.contentSize)
+        .defaultPosition(.center)
         MenuBarExtra("Pilot Pro Own", systemImage: model.enabled ? "dial.high.fill" : "dial.low") {
             Text(model.status)
             Text(model.menuProfile.name)

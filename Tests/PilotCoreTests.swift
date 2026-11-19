@@ -31,7 +31,25 @@ import Foundation
         check(PilotInputState.opposite("stick.y-") == "stick.y+", "Joystick calibration derives opposite direction")
         check(PilotControl.all.filter({ $0.id.hasPrefix("side.") }).count == 8, "Exactly four plus four side buttons")
         check(PilotControl.all.filter({ $0.id.hasPrefix("cross.") }).count == 4, "Four lower cross buttons are separate")
-        check(PilotControl.all.count == 24 && PilotControl.calibration.count == 19, "Complete 24-action map and 19-step wizard")
+        check(PilotControl.all.count == 28 && PilotControl.calibration.count == 19, "Complete 28-action map keeps the 19-step physical wizard")
+        var diagonalConfig = PilotConfiguration()
+        diagonalConfig.bindings = ["stick.up": "stick.y+", "stick.down": "stick.y-", "stick.left": "stick.x-", "stick.right": "stick.x+"]
+        for (id, x, y) in [("stick.up-left", -400, 400), ("stick.up-right", 400, 400), ("stick.down-left", -400, -400), ("stick.down-right", 400, -400)] {
+            let tokens = PilotInputState.stickTokens(x: x, y: y, deadZone: 140)
+            check(tokens.count == 1 && tokens.first == diagonalConfig.resolvedBindings[id], "Diagonal is a single independent signal: \(id)")
+            let controls = diagonalConfig.resolvedBindings.filter { tokens.contains($0.value) }.map(\.key)
+            check(controls == [id] && diagonalConfig.profiles[0].activePage.shortcuts[id] == nil, "Blank diagonal cannot fall back to cardinal actions: \(id)")
+        }
+        check(PilotInputState.stickTokens(x: 140, y: 141, deadZone: 140) == ["stick.y+"] && PilotInputState.stickTokens(x: 141, y: 141, deadZone: 140) == ["stick.x+&stick.y+"], "Crossing the second axis threshold switches exclusively from cardinal to diagonal")
+        diagonalConfig.bindings = ["stick.up": "stick.x-", "stick.down": "stick.x+", "stick.left": "stick.y+", "stick.right": "stick.y-"]
+        check(diagonalConfig.resolvedBindings["stick.up-left"] == "stick.x-&stick.y+", "Diagonal identification respects inverted and swapped calibrated axes")
+        diagonalConfig.bindings.removeValue(forKey: "stick.left")
+        check(diagonalConfig.resolvedBindings["stick.up-left"] == nil && diagonalConfig.resolvedBindings["stick.up-right"] != nil, "Forgetting an axis invalidates only its dependent diagonals")
+        check(PilotInputState.diagonalToken("stick.x+", "stick.x-") == nil, "Two directions of one axis cannot be identified as a diagonal")
+        var diagonalPage = PilotPage(name: "Diagonal macros")
+        diagonalPage.shortcuts["stick.up-left"] = Shortcut(keyCode: 49, modifiers: 0, label: "Espai")
+        let restoredDiagonalPage = try JSONDecoder().decode(PilotPage.self, from: JSONEncoder().encode(diagonalPage))
+        check(restoredDiagonalPage.isValid && restoredDiagonalPage.shortcuts == diagonalPage.shortcuts, "Independent diagonal actions survive saving and reopening")
         var zonePage = PilotPage(name: "Fine control")
         check(abs(zonePage.deadZonePercent - 27.397) < 0.01, "Existing raw dead zone is accurately displayed as a percentage")
         zonePage.deadZonePercent = 10
@@ -122,6 +140,17 @@ import Foundation
         var copiedWheel = PilotPage(name: "Wheel copy")
         copiedWheel.copySettings(from: wheelPage)
         check(copiedWheel.wheelPolarity == wheelPage.wheelPolarity && copiedWheel.name == "Wheel copy", "Complete page copying includes independent wheel polarity")
+        var selectionSource = PilotPage(name: "Source selection", shortcuts: ["stick.up-left": macro, "side.left.1": named], names: ["stick.up-left": "Diagonal macro"])
+        var selectionDestination = PilotPage(name: "Destination selection", shortcuts: ["side.left.1": legacyShortcut, "side.left.2": macro, "side.right.1": legacyShortcut], names: ["side.left.1": "Old name", "side.left.2": "Clear me", "side.right.1": "Keep me"], deadZone: 200, repeatInterval: 0.3, wheelStep: 4)
+        selectionDestination.setPositiveClockwise(false, for: "small")
+        let selectionIdentity = selectionDestination.id
+        selectionDestination.copyControls(["stick.up-left", "side.left.1", "side.left.2"], from: selectionSource)
+        check(selectionDestination.shortcuts["stick.up-left"] == macro && selectionDestination.shortcuts["side.left.1"] == named && selectionDestination.names["stick.up-left"] == "Diagonal macro", "Selected copy includes macros, action labels and control names")
+        check(selectionDestination.shortcuts["side.left.2"] == nil && selectionDestination.names["side.left.2"] == nil && selectionDestination.names["side.left.1"] == nil, "Selected empty actions and automatic names replace destination assignments")
+        check(selectionDestination.shortcuts["side.right.1"] == legacyShortcut && selectionDestination.names["side.right.1"] == "Keep me", "Partial copy preserves all unselected controls")
+        check(selectionDestination.id == selectionIdentity && selectionDestination.name == "Destination selection" && selectionDestination.deadZone == 200 && selectionDestination.repeatInterval == 0.3 && selectionDestination.wheelStep == 4 && !selectionDestination.positiveClockwise(for: "small"), "Partial copy preserves destination identity and response settings")
+        selectionSource.shortcuts.removeAll()
+        check(selectionDestination.shortcuts["stick.up-left"] == macro, "Copied control actions are independent of the source")
         let runner = SequenceRunner()
         var emissions: [(UInt16, Date)] = []
         var finished = 0

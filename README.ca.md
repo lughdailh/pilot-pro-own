@@ -2,10 +2,13 @@
 
 Controlador USB natiu i de codi obert per al **XPPen Pilot Pro**, amb llicència [MIT](LICENSE).
 
-Permet configurar les tres rodes, els vuit botons laterals, la creu inferior, el joystick i els botons del joystick i de la roda petita. En total, 24 senyals assignables.
+Permet configurar les tres rodes, els vuit botons laterals, la creu inferior, el joystick i els botons del joystick i de la roda petita. En total, 28 senyals assignables, incloent-hi quatre diagonals independents.
 
 - Pàgines amb títol, com Timeline i Browser, amb configuracions independents.
 - Creació, duplicació i còpia completa de pàgines, també entre perfils.
+- Selecció múltiple amb ⌘-clic o el menú del botó dret; còpia dels controls seleccionats a una altra pàgina o perfil.
+- Connexió, perfil i identificació a l’esquerra; inspector de l’acció sempre a la dreta. Finestra flotant «Configuració» per a permisos, administració i exportació.
+- Diagonals del joystick amb acció pròpia, inicialment buides: no activen les dues direccions rectes. S’identifiquen automàticament a partir dels eixos calibrats.
 - Clic directe sobre «Sense drecera» o la drecera actual per gravar-la.
 - Botons que executen dreceres, canvien de pàgina o combinen canvis de pàgina, tecles i pauses dins d’una seqüència.
 - Etiquetes editables per a totes les accions; per defecte mostren la combinació gravada.
