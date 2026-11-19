@@ -116,6 +116,7 @@ import Foundation
         wheelPage.setPositiveClockwise(false, for: "small")
         check(wheelPage.actionControl(for: "small.right") == "small.left" && wheelPage.actionControl(for: "small.left") == "small.right", "Inverting a wheel swaps its positive and negative actions")
         check(wheelPage.actionControl(for: "large.right") == "large.right" && wheelPage.actionControl(for: "side.left.1") == "side.left.1" && wheelPage.actionControl(for: "stick.left") == "stick.left", "Wheel polarity leaves other wheels, buttons and joystick directions unchanged")
+        check(wheelPage.actionControl(for: wheelPage.actionControl(for: "small.right")) == "small.right", "Physical wheel selection maps back correctly for calibration when polarity is inverted")
         let restoredWheel = try JSONDecoder().decode(PilotPage.self, from: JSONEncoder().encode(wheelPage))
         check(!restoredWheel.positiveClockwise(for: "small"), "Per-wheel polarity survives saving and reopening")
         var copiedWheel = PilotPage(name: "Wheel copy")

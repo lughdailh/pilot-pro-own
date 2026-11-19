@@ -221,7 +221,7 @@ final class PilotModel: ObservableObject {
         if enabled { disable() }
         self.wizard = wizard
         selected = control
-        learning = control
+        learning = wizard ? control : editingPage.actionControl(for: control)
         learnedNotice = nil
         input.prepareLearning()
         stickArmed = joystickX == 0 && joystickY == 0
@@ -237,7 +237,10 @@ final class PilotModel: ObservableObject {
     var learningInstruction: String {
         guard let learning else { return "" }
         if learning.hasPrefix("stick.") { return "Centra el joystick i mou-lo només cap a \(learning == "stick.up" ? "amunt" : "l’esquerra")." }
-        if learning.hasSuffix(".right") { return "Gira només aquesta roda en sentit horari. També s’identificarà el sentit contrari." }
+        let parts = learning.split(separator: ".")
+        if parts.count == 2, ["small", "large", "dial"].contains(String(parts[0])), ["left", "right"].contains(String(parts[1])) {
+            return "Gira només aquesta roda en sentit \(parts[1] == "right" ? "horari" : "antihorari"). També s’identificarà el sentit contrari."
+        }
         return "Deixa anar tots els botons i prem només aquest botó una vegada."
     }
     private var stickArmed = true
@@ -257,7 +260,7 @@ final class PilotModel: ObservableObject {
         config.bindings[controlID] = token
         if let otherID = control.opposite, let opposite = PilotInputState.opposite(token) { config.bindings[otherID] = opposite }
         learning = nil
-        learnedNotice = "Identificat: \(displayName(control))"
+        learnedNotice = "Identificat: \(control.name)"
         save()
         log("\(control.name) ← \(token)")
     }

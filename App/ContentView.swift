@@ -63,7 +63,7 @@ struct ContentView: View {
                 Image(systemName: "dial.high.fill").font(.system(size: 30)).foregroundStyle(.cyan)
                 VStack(alignment: .leading) {
                     Text("PILOT OWN").font(.headline)
-                    Text("Controlador USB · 0.4.1").font(.caption).foregroundStyle(.secondary)
+                    Text("Controlador USB · 0.4.2").font(.caption).foregroundStyle(.secondary)
                 }
             }
             Divider()
@@ -147,8 +147,8 @@ struct ContentView: View {
                 Text(model.displayName(model.currentControl)).font(.title2.bold())
                 if let wheel = model.selectedWheel {
                     Picker("Acció de la roda", selection: Binding(get: { model.selected }, set: { model.cancelLearning(); model.selected = $0 })) {
-                        Text("− Negatiu").tag(wheel + ".left")
-                        Text("+ Positiu").tag(wheel + ".right")
+                        Text("↺ Antihorari").tag(model.editingPage.actionControl(for: wheel + ".left"))
+                        Text("↻ Horari").tag(model.editingPage.actionControl(for: wheel + ".right"))
                     }.pickerStyle(.segmented)
                 }
                 if model.learning != nil || model.wizard {
@@ -285,9 +285,12 @@ struct PilotDiagram: View {
                     }
                 }
                 target("small.press", label: "●", x: 450, y: 207, width: 65, height: 65, scale: scale)
-                target("small.right", label: "↻", x: 535, y: 207, width: 65, height: 65, scale: scale)
-                target("large.right", label: "↻", x: 450, y: 296, width: 65, height: 44, scale: scale)
-                target("dial.right", label: "↻", x: 450, y: 350, width: 65, height: 44, scale: scale)
+                wheelTarget("small", clockwise: false, x: 350, y: 207, scale: scale)
+                wheelTarget("small", clockwise: true, x: 550, y: 207, scale: scale)
+                wheelTarget("large", clockwise: false, x: 340, y: 390, scale: scale)
+                wheelTarget("large", clockwise: true, x: 560, y: 390, scale: scale)
+                wheelTarget("dial", clockwise: false, x: 210, y: 510, scale: scale)
+                wheelTarget("dial", clockwise: true, x: 690, y: 510, scale: scale)
                 target("joystick.press", label: "●", x: 450, y: 510, width: 100, height: 100, scale: scale)
                 target("stick.up", label: "↑", x: 450, y: 412, width: 50, height: 50, scale: scale)
                 target("stick.down", label: "↓", x: 450, y: 607, width: 50, height: 50, scale: scale)
@@ -299,6 +302,16 @@ struct PilotDiagram: View {
                 target("cross.right", label: "→", x: 510, y: 899, width: 54, height: 66, scale: scale)
             }.frame(width: w, height: h).position(x: geo.size.width / 2, y: geo.size.height / 2)
         }.padding(12)
+    }
+    private func wheelTarget(_ wheel: String, clockwise: Bool, x: Double, y: Double, scale: Double) -> some View {
+        let physical = wheel + (clockwise ? ".right" : ".left")
+        let logical = model.editingPage.actionControl(for: physical)
+        let wheelName = wheel == "small" ? "Roda petita" : wheel == "large" ? "Roda gran" : "Tercera roda"
+        let title = wheelName + (clockwise ? " · gir horari" : " · gir antihorari")
+        return WheelDirectionTarget(clockwise: clockwise, title: title, diameter: 72 * scale,
+                                    selected: model.selected == logical, mapped: model.config.bindings[physical] != nil) {
+            model.cancelLearning(); model.selected = logical
+        }.position(x: x * scale, y: y * scale)
     }
     private func target(_ id: String, label: String, x: Double, y: Double, width: Double, height: Double, scale: Double) -> some View {
         let mapped = model.config.bindings[id] != nil
@@ -347,5 +360,34 @@ private struct ControlHitTarget: View {
             .foregroundStyle(tint)
             .background(Color.black, in: Circle())
             .offset(x: 3, y: -3)
+    }
+}
+
+private struct WheelDirectionTarget: View {
+    let clockwise: Bool
+    let title: String
+    let diameter: Double
+    let selected: Bool
+    let mapped: Bool
+    let action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: clockwise ? "arrow.clockwise" : "arrow.counterclockwise")
+                .font(.system(size: max(14, diameter * 0.42), weight: .medium))
+                .foregroundStyle(selected ? Color.cyan : Color.white)
+                .frame(width: diameter, height: diameter)
+                .background(Circle().fill(Color.black))
+                .overlay { Circle().stroke(Color.white, lineWidth: 1.2) }
+                .shadow(color: selected ? Color.cyan.opacity(0.65) : .clear, radius: 5)
+                .overlay(alignment: .topTrailing) {
+                    Image(systemName: mapped ? "checkmark.circle.fill" : "questionmark.circle.fill")
+                        .font(.system(size: max(8, diameter * 0.23)))
+                        .foregroundStyle(mapped ? Color.green : Color.orange)
+                        .background(Color.black, in: Circle())
+                }
+                .contentShape(Circle())
+        }.buttonStyle(.plain).help(title)
+            .accessibilityLabel(title)
+            .accessibilityValue(mapped ? "Identificat" : "Pendent")
     }
 }

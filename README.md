@@ -6,7 +6,7 @@ An open-source, native macOS USB controller for the **XPPen Pilot Pro** (`28bd:0
 
 ## Features
 
-- Three wheels with independent positive (+) and negative (−) actions. Choose which sign clockwise rotation executes, independently for each wheel and page.
+- Three wheels with paired clockwise/anticlockwise controls on the map: white outlined circles with opaque black interiors and direction arrows. Independent positive (+) and negative (−) actions. Choose which sign clockwise rotation executes, independently for each wheel and page.
 - Eight side buttons (four on each side), four lower directional buttons, the joystick button and the small-wheel button.
 - Four joystick directions with a **percentage dead zone**, 0.5 percentage-point slider increments, numeric entry and a live preview.
 - Named pages such as **Timeline** and **Browser**, with independent shortcuts, macros, control names and response settings.
